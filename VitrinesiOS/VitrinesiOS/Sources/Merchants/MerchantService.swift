@@ -80,7 +80,8 @@ final class MerchantService {
         let kwargs: [String: Any] = [
             "domain": [["id", "=", id]],
             "fields": detailFields,
-            "limit": 1
+            "limit": 1,
+            "context": ["active_test": false]   // commerce éventuellement archivé
         ]
 
         let results: [Merchant] = try await client.call(
@@ -244,6 +245,21 @@ final class MerchantService {
             args: [],
             kwargs: kwargs
         )
+    }
+
+    /// Une offre par id (pour ouvrir un bon plan depuis une notification).
+    func fetchOffer(id: Int) async throws -> MerchantCoupon? {
+        let kwargs: [String: Any] = [
+            "domain": [["id", "=", id]],
+            "fields": ["id", "name", "coupon_value", "coupon_unit", "date_valid_until",
+                       "short_text_content", "image_url", "merchant_id", "has_end_date"],
+            "limit": 1,
+            "context": ["active_test": false]   // offre éventuellement archivée/expirée
+        ]
+        let r: [MerchantCoupon] = try await client.call(
+            model: "local.rewards.offer", method: "search_read", args: [], kwargs: kwargs
+        )
+        return r.first
     }
 
     /// Offres expirées (pour la section « N terminées » repliable).

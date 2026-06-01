@@ -57,6 +57,85 @@ extension LinearGradient {
     )
 }
 
+// MARK: - Chargement d'images (URLSession dédiée, HTTP/3 désactivé)
+
+/// `AsyncImage` passe par `URLSession.shared` (non configurable) et déclenche des
+/// « Protocol error (100) / Connection error(12:1) » avec certains serveurs (Odoo.sh dev)
+/// quand iOS tente HTTP/3. Ce chargeur force HTTP/2, partage les cookies de session,
+/// limite la concurrence et met en cache.
+/// Limite le nombre de chargements d'images simultanés (le serveur Odoo.sh dev
+/// reset la connexion HTTP/2 — EPROTO 100 — si trop de streams s'ouvrent d'un coup).
+actor ConcurrencyGate {
+    private let limit: Int
+    private var inUse = 0
+    private var queue: [CheckedContinuation<Void, Never>] = []
+    init(_ limit: Int) { self.limit = limit }
+    func acquire() async {
+        if inUse < limit { inUse += 1; return }
+        await withCheckedContinuation { queue.append($0) }
+    }
+    func release() {
+        if !queue.isEmpty { queue.removeFirst().resume() } else { inUse -= 1 }
+    }
+}
+
+enum ImageLoader {
+    static let session: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.httpCookieStorage = HTTPCookieStorage.shared
+        c.httpShouldSetCookies = true
+        c.requestCachePolicy = .returnCacheDataElseLoad
+        c.urlCache = URLCache(memoryCapacity: 25_000_000, diskCapacity: 150_000_000)
+        c.httpMaximumConnectionsPerHost = 2
+        c.timeoutIntervalForRequest = 30
+        return URLSession(configuration: c)
+    }()
+
+    private static let gate = ConcurrencyGate(3)
+
+    static func load(_ url: URL?) async -> UIImage? {
+        guard let url else { return nil }
+        await gate.acquire()
+        defer { Task { await gate.release() } }
+        for attempt in 0..<2 {
+            var request = URLRequest(url: url)
+            request.assumesHTTP3Capable = false   // évite la négociation QUIC
+            if let (data, response) = try? await session.data(for: request),
+               (response as? HTTPURLResponse)?.statusCode == 200,
+               let image = UIImage(data: data) {
+                return image
+            }
+            if attempt == 0 { try? await Task.sleep(nanoseconds: 350_000_000) }
+        }
+        return nil
+    }
+}
+
+enum RemoteImagePhase {
+    case empty
+    case success(Image)
+    case failure
+}
+
+/// Remplacement d'`AsyncImage` utilisant `ImageLoader` (URLSession configurée).
+struct RemoteImage<Content: View>: View {
+    let url: URL?
+    @ViewBuilder var content: (RemoteImagePhase) -> Content
+    @State private var phase: RemoteImagePhase = .empty
+
+    var body: some View {
+        content(phase)
+            .task(id: url) {
+                phase = .empty
+                if let image = await ImageLoader.load(url) {
+                    phase = .success(Image(uiImage: image))
+                } else {
+                    phase = .failure
+                }
+            }
+    }
+}
+
 // MARK: - HTML → texte brut
 
 extension String {

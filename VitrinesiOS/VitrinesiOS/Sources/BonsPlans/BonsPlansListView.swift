@@ -316,7 +316,7 @@ private struct ExpiredOfferRow: View {
     private var thumbnail: some View {
         Group {
             if let url = coupon.imageURL {
-                AsyncImage(url: url) { phase in
+                RemoteImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image.resizable().scaledToFill()
                     } else {
@@ -377,7 +377,7 @@ private struct BonPlanCard: View {
             .frame(maxWidth: .infinity)
             .overlay {
                 if let url = coupon.imageURL {
-                    AsyncImage(url: url) { phase in
+                    RemoteImage(url: url) { phase in
                         switch phase {
                         case .success(let image): image.resizable().scaledToFill()
                         case .empty:              ZStack { LinearGradient.brandSurface; ProgressView() }

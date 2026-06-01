@@ -43,6 +43,9 @@ struct MerchantDetailView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Color.brandNavy)
                 }
+            } else {
+                ProgressView("Chargement…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle(merchantName)
@@ -77,7 +80,7 @@ struct MerchantDetailView: View {
     private func heroImage(merchant: Merchant) -> some View {
         Group {
             if let url = merchant.imageURL {
-                AsyncImage(url: url) { phase in
+                RemoteImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
@@ -180,6 +183,18 @@ struct MerchantDetailView: View {
         .background(Color.brandSurface2.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.brandNavy.opacity(0.08), lineWidth: 1))
+    }
+
+    /// Format français : +33 / 0033 → 0, puis groupes de 2 chiffres (06 18 02 18 09).
+    static func formatFRPhone(_ raw: String) -> String {
+        var s = raw.filter { $0.isNumber || $0 == "+" }
+        if s.hasPrefix("+33") { s = "0" + s.dropFirst(3) }
+        else if s.hasPrefix("0033") { s = "0" + s.dropFirst(4) }
+        let digits = Array(s.filter { $0.isNumber })
+        guard digits.count == 10 else { return raw.trimmingCharacters(in: .whitespaces) }
+        return stride(from: 0, to: 10, by: 2)
+            .map { String(digits[$0]) + String(digits[$0 + 1]) }
+            .joined(separator: " ")
     }
 
     private func presentationText(_ merchant: Merchant) -> String? {
@@ -335,8 +350,10 @@ struct MerchantDetailView: View {
             })
         }
         if let phone = merchant.phone, !phone.isEmpty {
-            items.append(ContactItem(icon: "phone.fill", primary: phone, secondary: "Appeler") {
-                if let url = URL(string: "tel:\(phone.replacingOccurrences(of: " ", with: ""))") { openURL(url) }
+            let display = Self.formatFRPhone(phone)
+            let dial = display.filter { $0.isNumber }
+            items.append(ContactItem(icon: "phone.fill", primary: display, secondary: "Appeler") {
+                if let url = URL(string: "tel:\(dial)") { openURL(url) }
             })
         }
         if let website = merchant.website, !website.isEmpty {

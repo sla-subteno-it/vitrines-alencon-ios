@@ -529,7 +529,7 @@ private struct MerchantThumb: View {
     }
 
     var body: some View {
-        AsyncImage(url: url) { phase in
+        RemoteImage(url: url) { phase in
             switch phase {
             case .success(let image): image.resizable().scaledToFill()
             default:

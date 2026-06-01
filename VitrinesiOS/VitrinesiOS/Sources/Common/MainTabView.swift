@@ -59,8 +59,7 @@ struct MainTabView: View {
         case .merchants: MerchantsListView()
         case .deals:     BonsPlansListView()
         case .news:      ActualitesView()
-        case .notifs:    ComingSoonTab(title: "Notifications", icon: "bell",
-                                       message: "Vos notifications apparaîtront ici.")
+        case .notifs:    NotificationsView()
         case .account:   MonCompteView()
         }
     }

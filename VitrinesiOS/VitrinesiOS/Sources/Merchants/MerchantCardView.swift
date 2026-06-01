@@ -149,7 +149,7 @@ private struct MerchantThumbnail: View {
     var body: some View {
         Group {
             if let url = merchant.imageURL {
-                AsyncImage(url: url) { phase in
+                RemoteImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
@@ -160,8 +160,6 @@ private struct MerchantThumbnail: View {
                             LinearGradient.brandSurface
                             ProgressView()
                         }
-                    @unknown default:
-                        PlaceholderIcon()
                     }
                 }
             } else {

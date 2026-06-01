@@ -31,7 +31,7 @@ struct CouponDetailView: View {
         ZStack {
             Color.brandSurface2
             if let url = coupon.imageURL {
-                AsyncImage(url: url) { phase in
+                RemoteImage(url: url) { phase in
                     switch phase {
                     case .success(let image): image.resizable().scaledToFit()
                     case .empty:              ProgressView()
