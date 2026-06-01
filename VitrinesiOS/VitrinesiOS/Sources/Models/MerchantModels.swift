@@ -190,21 +190,60 @@ struct MerchantReview: Identifiable {
 
 // MARK: - Coupon lié à un commerçant (local.rewards.offer)
 
-struct MerchantCoupon: Identifiable, Decodable {
+struct MerchantCoupon: Identifiable, Decodable, Hashable {
     let id: Int
     let name: String
     let couponValue: Double
     let couponUnit: String?
     let dateValidUntil: String?
     let shortTextContent: String?
+    let imageUrl: String?
+    let merchantId: Int?
+    let merchantName: String?
+    let hasEndDate: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, name
-        case couponValue     = "coupon_value"
-        case couponUnit      = "coupon_unit"
-        case dateValidUntil  = "date_valid_until"
+        case couponValue      = "coupon_value"
+        case couponUnit       = "coupon_unit"
+        case dateValidUntil   = "date_valid_until"
         case shortTextContent = "short_text_content"
+        case imageUrl         = "image_url"
+        case merchantId       = "merchant_id"
+        case hasEndDate       = "has_end_date"
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id               = try c.decode(Int.self, forKey: .id)
+        name             = (try? c.decode(String.self, forKey: .name)) ?? ""
+        couponValue      = (try? c.decode(Double.self, forKey: .couponValue)) ?? 0
+        couponUnit       = try? c.decode(String.self, forKey: .couponUnit)
+        dateValidUntil   = try? c.decode(String.self, forKey: .dateValidUntil)
+        shortTextContent = try? c.decode(String.self, forKey: .shortTextContent)
+        imageUrl         = try? c.decode(String.self, forKey: .imageUrl)
+        hasEndDate       = (try? c.decode(Bool.self, forKey: .hasEndDate)) ?? false
+
+        // merchant_id (Many2one) : Odoo renvoie [id, "name"] ou false
+        if var m2o = try? c.nestedUnkeyedContainer(forKey: .merchantId) {
+            merchantId   = try? m2o.decode(Int.self)
+            merchantName = try? m2o.decode(String.self)
+        } else {
+            merchantId   = nil
+            merchantName = nil
+        }
+    }
+
+    /// URL de l'image du bon plan (image_url Adelya, sinon image Odoo de l'offre).
+    var imageURL: URL? {
+        if let url = imageUrl, !url.isEmpty {
+            return URL(string: url.hasPrefix("http") ? url : OdooConfig.baseURL + url)
+        }
+        return nil
+    }
+
+    static func == (lhs: MerchantCoupon, rhs: MerchantCoupon) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 // MARK: - Filtres actifs
@@ -234,6 +273,24 @@ struct MerchantFilters: Equatable {
         if acceptGiftCard { count += 1 }
         if acceptFidelityCard { count += 1 }
         return count
+    }
+}
+
+// MARK: - Catégories d'un commerçant (léger, pour le filtre Bons Plans)
+
+struct PartnerCategories: Decodable {
+    let id: Int
+    let localRewardsTagIds: [Int]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case localRewardsTagIds = "local_rewards_tag_ids"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        localRewardsTagIds = (try? c.decode([Int].self, forKey: .localRewardsTagIds)) ?? []
     }
 }
 

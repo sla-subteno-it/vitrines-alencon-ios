@@ -8,7 +8,18 @@ import Foundation
 // MARK: - Configuration
 
 enum OdooConfig {
-    static let baseURL = "https://www.vitrines-alencon.fr"
+#if DEBUG
+    // Build Debug (lancé depuis Xcode) → serveur de staging (Odoo.sh)
+    // On vise l'URL Odoo.sh native (cert *.dev.odoo.com valide) et non
+    // staging.vitrines-alencon.fr, dont le domaine custom n'a pas encore
+    // de certificat provisionné → erreur TLS sinon.
+    static let baseURL  = "https://subteno-it-vitrines-alencon-staging-32891533.dev.odoo.com"
+    static let database = "subteno-it-vitrines-alencon-staging-32891533"
+#else
+    // Build Release / TestFlight / App Store → production
+    static let baseURL  = "https://www.vitrines-alencon.fr"
+    static let database = "subteno-it-vitrines-alencon-master-25376606"
+#endif
     static let jsonRPCPath = "/web/dataset/call_kw"
     static let sessionPath = "/web/session/authenticate"
 }
@@ -106,19 +117,23 @@ actor OdooSession {
     static let shared = OdooSession()
     private var sessionId: String?
     private var uid: Int?
+    private var userName: String?
 
-    func set(sessionId: String?, uid: Int?) {
+    func set(sessionId: String?, uid: Int?, name: String? = nil) {
         self.sessionId = sessionId
         self.uid = uid
+        self.userName = name
     }
 
     func getSessionId() -> String? { sessionId }
     func getUID() -> Int? { uid }
+    func getUserName() -> String? { userName }
     func isAuthenticated() -> Bool { uid != nil }
 
     func clear() {
         sessionId = nil
         uid = nil
+        userName = nil
     }
 }
 
@@ -136,11 +151,11 @@ final class OdooClient {
         return URLSession(configuration: config)
     }()
 
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
-        return d
-    }()
+    // ⚠️ Pas de .convertFromSnakeCase : tous les modèles déclarent des CodingKeys
+    // explicites en snake_case ("company_brief", "ordered_reference_ids"…).
+    // Combiner les deux casse le décodage (la stratégie convertit la clé JSON en
+    // camelCase, qui ne matche plus la CodingKey snake_case → champ silencieusement nil).
+    private let decoder = JSONDecoder()
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -160,7 +175,7 @@ final class OdooClient {
             "method": "call",
             "id": 1,
             "params": [
-                "db": "vitrines_alencon",
+                "db": OdooConfig.database,
                 "login": login,
                 "password": password
             ]
@@ -183,12 +198,46 @@ final class OdooClient {
             throw OdooError.unauthorized
         }
 
+        let name = result["name"] as? String ?? result["username"] as? String
+
         // Récupérer le session_id depuis les cookies
         let cookies = HTTPCookieStorage.shared.cookies(for: url) ?? []
         let sessionId = cookies.first(where: { $0.name == "session_id" })?.value
 
-        await OdooSession.shared.set(sessionId: sessionId, uid: uid)
+        await OdooSession.shared.set(sessionId: sessionId, uid: uid, name: name)
         return uid
+    }
+
+    /// Tente de restaurer une session existante depuis le cookie persistant
+    /// (HTTPCookieStorage survit au redémarrage de l'app). À appeler au lancement.
+    @discardableResult
+    func restoreSession() async -> Bool {
+        guard let url = URL(string: OdooConfig.baseURL + "/web/session/get_session_info") else {
+            return false
+        }
+
+        let body: [String: Any] = ["jsonrpc": "2.0", "method": "call", "params": [:]]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        guard let (data, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let result = json["result"] as? [String: Any],
+              let uid = result["uid"] as? Int, uid > 0 else {
+            await OdooSession.shared.clear()
+            return false
+        }
+
+        let name = result["name"] as? String ?? result["username"] as? String
+        let sessionId = HTTPCookieStorage.shared.cookies(for: url)?
+            .first(where: { $0.name == "session_id" })?.value
+
+        await OdooSession.shared.set(sessionId: sessionId, uid: uid, name: name)
+        return true
     }
 
     func logout() async {
@@ -243,6 +292,15 @@ final class OdooClient {
            let error = json["error"] as? [String: Any] {
             let code = error["code"] as? Int ?? -1
             let errorData = error["data"] as? [String: Any]
+            let exceptionName = errorData?["name"] as? String ?? ""
+
+            // Odoo renvoie une session expirée en HTTP 200 + code 100
+            // (SessionExpiredException), pas en 401.
+            if code == 100 || exceptionName == "odoo.http.SessionExpiredException" {
+                await OdooSession.shared.clear()
+                throw OdooError.unauthorized
+            }
+
             let message = errorData?["message"] as? String
                        ?? error["message"] as? String
                        ?? "Erreur inconnue"

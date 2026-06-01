@@ -8,7 +8,7 @@ import Foundation
 final class MerchantService {
     static let shared = MerchantService()
     private let client = OdooClient.shared
-    private init() {}
+    nonisolated private init() {}
 
     // MARK: - Champs à récupérer pour la liste
 
@@ -41,7 +41,7 @@ final class MerchantService {
 
     // MARK: - Domain Odoo de base (commerçants visibles)
 
-    private var baseDomain: [[Any]] {
+    private var baseDomain: [Any] {
         [
             ["is_company", "=", true],
             ["api_unique_id", "!=", false],
@@ -54,57 +54,24 @@ final class MerchantService {
 
     // MARK: - Liste des commerçants
 
-    func fetchMerchants(filters: MerchantFilters = MerchantFilters()) async throws -> [Merchant] {
-        var domain = baseDomain
-
-        // Filtre par tag (catégorie commerçant)
-        if let tagId = filters.tagId {
-            domain.append(["local_rewards_tag_ids", "in", [tagId]])
-        }
-
-        // Filtre multi-références (OR)
-        if !filters.referenceIds.isEmpty {
-            domain.append(["ordered_reference_ids", "in", filters.referenceIds])
-        }
-
-        // Filtre multi-univers / reference_tag (OR)
-        if !filters.referenceTagIds.isEmpty {
-            domain.append(["reference_tag_ids", "in", filters.referenceTagIds])
-        }
-
-        // Filtre carte cadeau
-        if filters.acceptGiftCard {
-            domain.append(["accept_gift_card", "=", true])
-        }
-
-        // Filtre carte fidélité
-        if filters.acceptFidelityCard {
-            domain.append(["accept_fidelity_card", "=", true])
-        }
-
+    /// Récupère tous les commerçants visibles (domaine de base, champs STOCKÉS uniquement).
+    /// ⚠️ Le filtrage par tag/marque/univers se fait CÔTÉ CLIENT : ces champs
+    /// (ordered_reference_ids, reference_tag_ids…) sont calculés/non stockés côté Odoo
+    /// → "Cannot convert … to SQL because it is not stored" si on les met dans le domaine.
+    func fetchMerchants() async throws -> [Merchant] {
         let kwargs: [String: Any] = [
-            "domain": domain,
+            "domain": baseDomain,
             "fields": listFields,
             "order": "fvalue_sum desc, name asc",
-            "limit": 200
+            "limit": 500
         ]
 
-        let results: [Merchant] = try await client.call(
+        return try await client.call(
             model: "res.partner",
             method: "search_read",
             args: [],
             kwargs: kwargs
         )
-
-        // Filtre recherche textuelle côté client (comme Odoo)
-        if !filters.search.isEmpty {
-            let q = filters.search.lowercased()
-            return results.filter { merchant in
-                merchant.name.lowercased().contains(q)
-            }
-        }
-
-        return results
     }
 
     // MARK: - Détail d'un commerçant
@@ -242,7 +209,8 @@ final class MerchantService {
                 ["status", "=", "ACTIVE"],
                 ["is_expired", "=", false]
             ],
-            "fields": ["id", "name", "coupon_value", "coupon_unit", "date_valid_until", "short_text_content"],
+            "fields": ["id", "name", "coupon_value", "coupon_unit", "date_valid_until",
+                       "short_text_content", "image_url", "merchant_id", "has_end_date"],
             "order": "date_valid_until asc",
             "limit": 5
         ]
@@ -253,6 +221,64 @@ final class MerchantService {
             args: [],
             kwargs: kwargs
         )
+    }
+
+    // MARK: - Toutes les offres actives (onglet Bons Plans global)
+
+    func fetchAllActiveOffers() async throws -> [MerchantCoupon] {
+        let kwargs: [String: Any] = [
+            "domain": [
+                ["active", "=", true],
+                ["status", "=", "ACTIVE"],
+                ["is_expired", "=", false]
+            ],
+            "fields": ["id", "name", "coupon_value", "coupon_unit", "date_valid_until",
+                       "short_text_content", "image_url", "merchant_id", "has_end_date"],
+            "order": "date_valid_until asc, id asc",
+            "limit": 200
+        ]
+
+        return try await client.call(
+            model: "local.rewards.offer",
+            method: "search_read",
+            args: [],
+            kwargs: kwargs
+        )
+    }
+
+    /// Offres expirées (pour la section « N terminées » repliable).
+    func fetchExpiredOffers(limit: Int = 200) async throws -> [MerchantCoupon] {
+        let kwargs: [String: Any] = [
+            "domain": [["is_expired", "=", true]],
+            "fields": ["id", "name", "coupon_value", "coupon_unit", "date_valid_until",
+                       "short_text_content", "image_url", "merchant_id", "has_end_date"],
+            "order": "date_valid_until desc, id desc",
+            "limit": limit,
+            "context": ["active_test": false]   // inclure les offres archivées
+        ]
+        return try await client.call(
+            model: "local.rewards.offer",
+            method: "search_read",
+            args: [],
+            kwargs: kwargs
+        )
+    }
+
+    /// Catégories (local.rewards.tag) des commerçants donnés : merchantId → [tagId].
+    func fetchPartnerCategories(ids: [Int]) async throws -> [Int: [Int]] {
+        guard !ids.isEmpty else { return [:] }
+        let kwargs: [String: Any] = [
+            "domain": [["id", "in", ids]],
+            "fields": ["id", "local_rewards_tag_ids"]
+        ]
+        let partners: [PartnerCategories] = try await client.call(
+            model: "res.partner",
+            method: "search_read",
+            args: [],
+            kwargs: kwargs
+        )
+        return Dictionary(partners.map { ($0.id, $0.localRewardsTagIds) },
+                          uniquingKeysWith: { a, _ in a })
     }
 
     // MARK: - Ajouter aux favoris (nécessite auth)
