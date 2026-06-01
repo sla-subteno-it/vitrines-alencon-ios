@@ -32,6 +32,7 @@ struct MerchantDetailView: View {
                         detailContent(merchant: merchant)
                     }
                 }
+                .aboveTabBar()
                 .background(LinearGradient.brandSurface.ignoresSafeArea())
             } else if let error = viewModel.errorMessage {
                 ContentUnavailableView {

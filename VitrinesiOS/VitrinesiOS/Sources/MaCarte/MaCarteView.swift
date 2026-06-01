@@ -273,8 +273,9 @@ struct MaCarteView: View {
                 historySection
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 32)
+            .padding(.bottom, 8)
         }
+        .aboveTabBar()
         .background(Color(.systemBackground))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)

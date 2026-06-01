@@ -127,7 +127,10 @@ struct MonCompteView: View {
 
                     sectionTitle("Actions rapides")
                     AccountRow(icon: "bell", title: "Notifications")
-                    AccountRow(icon: "gift", title: "Carte cadeau")
+                    NavigationLink { CarteCadeauView() } label: {
+                        AccountRowLabel(icon: "gift", title: "Carte cadeau")
+                    }
+                    .buttonStyle(.plain)
 
                     sectionTitle("Mon profil")
                     AccountRow(icon: "person", title: "Mes infos personnelles")
@@ -138,14 +141,21 @@ struct MonCompteView: View {
                     AccountRow(icon: "megaphone", title: "Préférences de communication")
 
                     sectionTitle("Besoin d'aide ?")
-                    AccountRow(icon: "questionmark.circle", title: "Aide / FAQ")
-                    AccountRow(icon: "bubble.left.and.bubble.right", title: "Contactez-nous")
+                    NavigationLink { AideFaqView() } label: {
+                        AccountRowLabel(icon: "questionmark.circle", title: "Aide / FAQ")
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { ContactView() } label: {
+                        AccountRowLabel(icon: "bubble.left.and.bubble.right", title: "Contactez-nous")
+                    }
+                    .buttonStyle(.plain)
 
                     logoutButton
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 32)
+                .padding(.bottom, 8)
             }
+            .aboveTabBar()
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)

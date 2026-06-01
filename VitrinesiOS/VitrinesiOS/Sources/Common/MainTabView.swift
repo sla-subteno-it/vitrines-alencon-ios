@@ -6,6 +6,26 @@
 
 import SwiftUI
 
+// MARK: - Métriques + réservation d'espace pour le tab bar custom
+
+enum TabBarMetrics {
+    /// Hauteur de la barre d'onglets (hors home indicator, déjà géré par le safe area système).
+    static let height: CGFloat = 52
+}
+
+extension View {
+    /// Réserve la hauteur du tab bar custom en bas d'un `ScrollView` pour que son
+    /// contenu ne soit pas masqué par la barre. À appliquer sur le `ScrollView`
+    /// racine de chaque page hébergée dans un onglet (root ou poussée).
+    /// `safeAreaInset` appliqué directement au ScrollView insère son contenu de
+    /// façon fiable, contrairement à un `safeAreaInset` posé hors du NavigationStack.
+    func aboveTabBar() -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: TabBarMetrics.height)
+        }
+    }
+}
+
 struct MainTabView: View {
     @State private var selected: Tab = .accueil
     @State private var visited: Set<Tab> = [.accueil]
@@ -54,8 +74,7 @@ struct MainTabView: View {
     @ViewBuilder
     private func content(for tab: Tab) -> some View {
         switch tab {
-        case .accueil:   ComingSoonTab(title: "Accueil", icon: "house",
-                                       message: "Votre tableau de bord personnalisé.")
+        case .accueil:   AccueilView(selectTab: { selected = $0 })
         case .merchants: MerchantsListView()
         case .deals:     BonsPlansListView()
         case .news:      ActualitesView()
@@ -75,13 +94,19 @@ struct MainTabView: View {
                         Image(systemName: tab.icon)
                             .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
                             .symbolVariant(isSelected ? .fill : .none)
+                            .frame(height: 22)
                         Text(tab.label)
                             .font(BrandFont.sans(10, weight: isSelected ? .semibold : .regular))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .minimumScaleFactor(0.55)
+                            .allowsTightening(true)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 13)
                     }
                     .foregroundStyle(isSelected ? Color.brandNavy : Color.brandTextMuted)
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 1)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -96,22 +121,3 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - Onglet placeholder « Bientôt disponible »
-
-private struct ComingSoonTab: View {
-    let title: String
-    let icon: String
-    let message: String
-
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label(title, systemImage: icon)
-            } description: {
-                Text(message + "\n\nBientôt disponible.")
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}

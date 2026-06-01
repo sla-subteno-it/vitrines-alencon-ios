@@ -1,0 +1,5 @@
+{
+  "images" : [ { "filename" : "carte_cadeau_recto.svg", "idiom" : "universal" } ],
+  "info" : { "author" : "xcode", "version" : 1 },
+  "properties" : { "preserves-vector-representation" : true }
+}

@@ -43,12 +43,11 @@ struct LoginView: View {
 
     private var header: some View {
         VStack(spacing: 12) {
-            Image(systemName: "storefront.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.accentColor)
-                .padding(.top, 48)
-            Text("Vitrines d'Alençon")
-                .font(.largeTitle.bold())
+            Image("VitrinesLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 180, height: 180)
+                .padding(.top, 32)
             Text("Connectez-vous pour accéder à votre carte fidélité et vos avantages.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

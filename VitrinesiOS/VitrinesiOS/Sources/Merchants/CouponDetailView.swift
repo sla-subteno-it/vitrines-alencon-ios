@@ -18,8 +18,8 @@ struct CouponDetailView: View {
                     CountdownCard(until: until)
                 }
             }
-            .padding(.bottom, 24)
         }
+        .aboveTabBar()
         .background(LinearGradient.brandSurface.ignoresSafeArea())
         .navigationTitle("Bon plan")
         .navigationBarTitleDisplayMode(.inline)

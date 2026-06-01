@@ -250,8 +250,8 @@ struct NotificationsView: View {
                         }
                     }
                 }
-                .padding(.bottom, 24)
             }
+            .aboveTabBar()
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)

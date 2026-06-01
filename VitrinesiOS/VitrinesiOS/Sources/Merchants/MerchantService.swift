@@ -58,11 +58,11 @@ final class MerchantService {
     /// ⚠️ Le filtrage par tag/marque/univers se fait CÔTÉ CLIENT : ces champs
     /// (ordered_reference_ids, reference_tag_ids…) sont calculés/non stockés côté Odoo
     /// → "Cannot convert … to SQL because it is not stored" si on les met dans le domaine.
-    func fetchMerchants() async throws -> [Merchant] {
+    func fetchMerchants(order: String = "fvalue_sum desc, name asc") async throws -> [Merchant] {
         let kwargs: [String: Any] = [
             "domain": baseDomain,
             "fields": listFields,
-            "order": "fvalue_sum desc, name asc",
+            "order": order,
             "limit": 500
         ]
 
