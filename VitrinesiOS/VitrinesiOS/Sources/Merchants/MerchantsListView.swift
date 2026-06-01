@@ -35,8 +35,8 @@ struct MerchantsListView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
+            .aboveTabBar()
             .background(LinearGradient.brandSurface.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)

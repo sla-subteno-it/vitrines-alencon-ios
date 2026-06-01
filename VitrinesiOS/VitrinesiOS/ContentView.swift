@@ -17,7 +17,7 @@ struct ContentView: View {
             } else if auth.isAuthenticated {
                 MainTabView()
             } else {
-                LoginView()
+                PublicHomeView()
             }
         }
         .environmentObject(auth)
@@ -30,10 +30,11 @@ struct ContentView: View {
 /// Écran de chargement affiché pendant la vérification de session au lancement.
 private struct SplashView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "storefront.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.accentColor)
+        VStack(spacing: 24) {
+            Image("VitrinesLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 200, height: 200)
             ProgressView()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

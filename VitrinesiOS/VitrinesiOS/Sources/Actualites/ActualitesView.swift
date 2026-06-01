@@ -163,8 +163,8 @@ struct ActualitesView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
+            .aboveTabBar()
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
@@ -323,6 +323,7 @@ struct BlogPostDetailView: View {
             }
             .padding(16)
         }
+        .aboveTabBar()
         .background(Color(.systemBackground))
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)

@@ -105,8 +105,8 @@ struct BonsPlansListView: View {
                     }
                 }
                 .padding(.vertical, 8)
-                .padding(.bottom, 24)
             }
+            .aboveTabBar()
             .background(LinearGradient.brandSurface.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)

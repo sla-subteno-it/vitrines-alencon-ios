@@ -66,6 +66,15 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    /// Recharge l'état d'authentification depuis le cookie de session
+    /// (à appeler après une inscription réussie qui a connecté l'utilisateur).
+    func refreshSession() async {
+        isAuthenticated = await client.restoreSession()
+        if isAuthenticated {
+            userName = await OdooSession.shared.getUserName()
+        }
+    }
+
     // MARK: - Déconnexion
 
     func logout() async {

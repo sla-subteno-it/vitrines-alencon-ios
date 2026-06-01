@@ -320,6 +320,71 @@ final class OdooClient {
         }
     }
 
+    // MARK: - Appel d'une route JSON-RPC custom (controllers type="jsonrpc")
+
+    /// Appelle une route Odoo custom déclarée en `type="jsonrpc"` (ex:
+    /// `/scanner-carte-cadeau/scan`). Le corps suit l'enveloppe JSON-RPC
+    /// standard avec `params` = les arguments nommés du contrôleur.
+    func callRoute<T: Decodable>(_ path: String, params: [String: Any] = [:]) async throws -> T {
+        guard let url = URL(string: OdooConfig.baseURL + path) else {
+            throw OdooError.invalidURL
+        }
+
+        let body: [String: Any] = [
+            "jsonrpc": "2.0",
+            "method": "call",
+            "id": 1,
+            "params": params
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw OdooError.invalidResponse
+        }
+
+        if http.statusCode == 401 {
+            await OdooSession.shared.clear()
+            throw OdooError.unauthorized
+        }
+
+        guard http.statusCode == 200 else {
+            throw OdooError.invalidResponse
+        }
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let error = json["error"] as? [String: Any] {
+            let code = error["code"] as? Int ?? -1
+            let errorData = error["data"] as? [String: Any]
+            let exceptionName = errorData?["name"] as? String ?? ""
+            if code == 100 || exceptionName == "odoo.http.SessionExpiredException" {
+                await OdooSession.shared.clear()
+                throw OdooError.unauthorized
+            }
+            let message = errorData?["message"] as? String
+                       ?? error["message"] as? String
+                       ?? "Erreur inconnue"
+            throw OdooError.odooError(code: code, message: message)
+        }
+
+        do {
+            let decoded = try decoder.decode(JSONRPCResponse<T>.self, from: data)
+            if let result = decoded.result {
+                return result
+            }
+            throw OdooError.invalidResponse
+        } catch let e as OdooError {
+            throw e
+        } catch {
+            throw OdooError.decodingError(error)
+        }
+    }
+
     // MARK: - Requête HTTP simple (pour les endpoints web /merchants)
 
     func get(path: String, queryItems: [URLQueryItem] = []) async throws -> Data {
@@ -343,6 +408,145 @@ final class OdooClient {
         }
 
         return data
+    }
+
+    // MARK: - Formulaire website Odoo (/website/form)
+
+    /// Récupère le jeton CSRF de la page website indiquée (session courante).
+    func websiteCSRFToken(path: String = "/contact") async -> String? {
+        guard let data = try? await get(path: path),
+              let html = String(data: data, encoding: .utf8) else { return nil }
+
+        let patterns = [
+            #"name="csrf_token"\s+value="([^"]+)""#,
+            #"value="([^"]+)"\s+name="csrf_token""#,
+            #"csrf_token\s*[:=]\s*["']([^"']+)["']"#
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
+               match.numberOfRanges > 1,
+               let range = Range(match.range(at: 1), in: html) {
+                return String(html[range])
+            }
+        }
+        return nil
+    }
+
+    /// Soumet le formulaire de contact website (modèle `mail.mail`).
+    /// Renvoie true si Odoo a accepté l'envoi.
+    func submitContactForm(fields: [String: String]) async throws -> Bool {
+        guard let csrf = await websiteCSRFToken(path: "/contact") else {
+            throw OdooError.invalidResponse
+        }
+        guard let url = URL(string: OdooConfig.baseURL + "/website/form/mail.mail") else {
+            throw OdooError.invalidURL
+        }
+
+        var payload = fields
+        payload["csrf_token"] = csrf
+        payload["email_to"] = "contact@vitrines-alencon.fr"
+
+        let boundary = "----VitrinesAlenconFormBoundary7MA4YWxkTrZu0gW"
+        var body = Data()
+        for (key, value) in payload {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw OdooError.invalidResponse
+        }
+
+        // Odoo renvoie {"id": <int>} en cas de succès, {"error"...} sinon.
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if json["id"] != nil { return true }
+            if let error = json["error"] as? String { throw OdooError.odooError(code: -1, message: error) }
+        }
+        return false
+    }
+
+    // MARK: - Inscription & activation de compte
+
+    private func formURLEncoded(_ params: [String: String]) -> Data {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        let pairs = params.map { key, value -> String in
+            let k = key.addingPercentEncoding(withAllowedCharacters: allowed) ?? key
+            let v = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+            return "\(k)=\(v)"
+        }
+        return pairs.joined(separator: "&").data(using: .utf8) ?? Data()
+    }
+
+    private func postForm(path: String, params: [String: String]) async throws -> (Int, String) {
+        guard let url = URL(string: OdooConfig.baseURL + path) else { throw OdooError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = formURLEncoded(params)
+        let (data, response) = try await session.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let html = String(data: data, encoding: .utf8) ?? ""
+        return (code, html)
+    }
+
+    /// Extrait le texte du premier encart d'alerte (succès ou erreur) d'une page HTML.
+    private func firstAlertText(in html: String, kind: String) -> String? {
+        guard let range = html.range(of: kind) else { return nil }
+        let snippet = String(html[range.upperBound...].prefix(900))
+        let stripped = snippet.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty ? nil : String(stripped.prefix(220))
+    }
+
+    /// Demande d'activation d'un compte existant (`/activer-mon-compte`).
+    /// Le serveur renvoie toujours un succès générique si l'email est inconnu (sécurité).
+    func requestAccountActivation(email: String) async throws -> Bool {
+        guard let csrf = await websiteCSRFToken(path: "/activer-mon-compte") else {
+            throw OdooError.invalidResponse
+        }
+        let (code, html) = try await postForm(path: "/activer-mon-compte",
+                                              params: ["email": email, "csrf_token": csrf])
+        guard code == 200 else { throw OdooError.invalidResponse }
+        if html.contains("alert-success") || html.contains("o_activate_message") { return true }
+        if let err = firstAlertText(in: html, kind: "alert-danger") {
+            throw OdooError.odooError(code: -1, message: err)
+        }
+        return true
+    }
+
+    /// Inscription (création de carte) via `/web/signup`. En cas de succès, Odoo
+    /// connecte l'utilisateur (cookie de session) ; on restaure alors la session.
+    func signup(fields: [String: String]) async throws {
+        guard let csrf = await websiteCSRFToken(path: "/web/signup") else {
+            throw OdooError.invalidResponse
+        }
+        var params = fields
+        params["csrf_token"] = csrf
+        params["redirect"] = "/mobile-menu"
+        params["token"] = ""
+        let (_, html) = try await postForm(path: "/web/signup", params: params)
+
+        // Succès = session connectée (cookie posé par le POST).
+        if await restoreSession() { return }
+
+        if let err = firstAlertText(in: html, kind: "alert-danger") {
+            throw OdooError.odooError(code: -1, message: err)
+        }
+        throw OdooError.odooError(code: -1, message: "La création du compte a échoué. Vérifiez vos informations et réessayez.")
     }
 
     // MARK: - URL image Odoo
