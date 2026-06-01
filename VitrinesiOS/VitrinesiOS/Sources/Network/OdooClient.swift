@@ -13,8 +13,8 @@ enum OdooConfig {
     // On vise l'URL Odoo.sh native (cert *.dev.odoo.com valide) et non
     // staging.vitrines-alencon.fr, dont le domaine custom n'a pas encore
     // de certificat provisionné → erreur TLS sinon.
-    static let baseURL  = "https://subteno-it-vitrines-alencon-staging-32891533.dev.odoo.com"
-    static let database = "subteno-it-vitrines-alencon-staging-32891533"
+    static let baseURL  = "https://subteno-it-vitrines-alencon-staging-32921774.dev.odoo.com"
+    static let database = "subteno-it-vitrines-alencon-staging-32921774"
 #else
     // Build Release / TestFlight / App Store → production
     static let baseURL  = "https://www.vitrines-alencon.fr"

@@ -46,13 +46,15 @@ struct BlogPost: Identifiable, Decodable, Hashable {
     var coverImageURL: URL? {
         guard let cp = coverProperties,
               let range = cp.range(of: "url\\(([^)]+)\\)", options: .regularExpression) else { return nil }
-        var s = String(cp[range])
+        let s = String(cp[range])
             .replacingOccurrences(of: "url(", with: "")
             .replacingOccurrences(of: ")", with: "")
+            .replacingOccurrences(of: "\\", with: "")   // quotes échappées \" dans cover_properties
             .trimmingCharacters(in: CharacterSet(charactersIn: "'\" "))
         guard !s.isEmpty, s != "none" else { return nil }
-        if s.hasPrefix("http") { return URL(string: s) }
-        return URL(string: OdooConfig.baseURL + s)
+        let full = s.hasPrefix("http") ? s : OdooConfig.baseURL + s
+        // L'URL de cover_properties est DÉJÀ percent-encodée → ne pas ré-encoder (sinon %20 → %2520).
+        return URL(string: full)
     }
 
     var excerpt: String? {
@@ -112,6 +114,17 @@ final class ActualitesViewModel: ObservableObject {
             kwargs: ["domain": [["id", "=", id]], "fields": ["content"], "limit": 1]
         )
         return rows?.first?.content?.htmlStripped
+    }
+
+    /// Un article par id (pour l'ouvrir depuis une notification).
+    func fetchPost(id: Int) async -> BlogPost? {
+        let rows: [BlogPost]? = try? await client.call(
+            model: "blog.post", method: "search_read", args: [],
+            kwargs: ["domain": [["id", "=", id]],
+                     "fields": ["name", "subtitle", "teaser", "post_date",
+                                "author_id", "blog_id", "cover_properties"], "limit": 1]
+        )
+        return rows?.first
     }
 }
 
@@ -232,7 +245,7 @@ private struct BlogCard: View {
 private struct BlogCoverImage: View {
     let url: URL?
     var body: some View {
-        AsyncImage(url: url) { phase in
+        RemoteImage(url: url) { phase in
             switch phase {
             case .success(let image): image.resizable().scaledToFill()
             default:
@@ -279,10 +292,24 @@ struct BlogPostDetailView: View {
                 .font(BrandFont.sans(13))
                 .foregroundStyle(Color.brandTextMuted)
 
-                BlogCoverImage(url: post.coverImageURL)
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                // Cover en entier, adaptée à la largeur (ratio naturel) — pas de recadrage.
+                if post.coverImageURL != nil {
+                    RemoteImage(url: post.coverImageURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFit()
+                                .frame(maxWidth: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        case .empty:
+                            ZStack { Color.brandSurface2; ProgressView() }
+                                .frame(height: 200)
+                                .frame(maxWidth: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        case .failure:
+                            EmptyView()
+                        }
+                    }
+                }
 
                 if loadingContent {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20)
