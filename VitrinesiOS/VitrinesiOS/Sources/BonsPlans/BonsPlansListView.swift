@@ -316,6 +316,7 @@ private struct ExpiredOfferRow: View {
         .padding(12)
         .background(.white, in: .rect(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.brandNavy.opacity(0.05), lineWidth: 1))
+        .accessibilityElement(children: .combine)
     }
 
     private var thumbnail: some View {
@@ -374,6 +375,8 @@ private struct BonPlanCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(expired ? 0.65 : 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 
     private var imageView: some View {

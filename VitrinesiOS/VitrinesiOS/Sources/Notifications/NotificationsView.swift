@@ -432,6 +432,7 @@ private struct NotificationRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
     }
 
     private var avatar: some View {

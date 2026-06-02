@@ -164,13 +164,15 @@ enum BrandFont {
     static let sansName  = "Montserrat"        // corps
 
     /// Titre serif (Playfair Display). Retombe sur le serif système si absent.
+    /// `relativeTo:` → la police suit les réglages d'accessibilité (Dynamic Type).
     static func serif(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .custom(serifName, size: size).weight(weight)
+        .custom(serifName, size: size, relativeTo: .body).weight(weight)
     }
 
     /// Texte sans-serif (Montserrat). Retombe sur SF si absent.
+    /// `relativeTo:` → la police suit les réglages d'accessibilité (Dynamic Type).
     static func sans(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom(sansName, size: size).weight(weight)
+        .custom(sansName, size: size, relativeTo: .body).weight(weight)
     }
 
     /// Enregistre les polices embarquées (bundle) auprès du système.

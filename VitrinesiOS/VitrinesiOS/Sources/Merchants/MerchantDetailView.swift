@@ -414,6 +414,7 @@ struct MerchantDetailView: View {
                 Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
                     .foregroundStyle(viewModel.isFavorite ? Color.brandRed : Color.brandNavy)
             }
+            .accessibilityLabel(viewModel.isFavorite ? "Retirer des favoris" : "Ajouter aux favoris")
         }
     }
 }

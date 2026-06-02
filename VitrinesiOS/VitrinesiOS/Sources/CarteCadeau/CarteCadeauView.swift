@@ -287,6 +287,8 @@ private struct GiftCardRow: View {
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 }
 

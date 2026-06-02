@@ -57,6 +57,7 @@ struct BarcodeScannerView: View {
                             .padding(12)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+                    .accessibilityLabel("Fermer le scanner")
                     .padding()
                 }
                 Spacer()

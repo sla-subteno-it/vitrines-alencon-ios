@@ -258,6 +258,9 @@ struct MaCarteView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 LoyaltyCard(viewModel: viewModel) { showBarcode = true }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Ma carte de fidélité. Toucher pour afficher le code-barres en grand.")
                 barcodeHint
                 Divider()
                 preferencesSection
@@ -460,6 +463,7 @@ struct MaCarteView: View {
                     .padding(14)
                     .background(.white, in: .rect(cornerRadius: 14))
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.brandNavy.opacity(0.06), lineWidth: 1))
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -490,6 +494,7 @@ struct MaCarteView: View {
                             .foregroundStyle(Color.brandTextMuted)
                             .lineLimit(1)
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
