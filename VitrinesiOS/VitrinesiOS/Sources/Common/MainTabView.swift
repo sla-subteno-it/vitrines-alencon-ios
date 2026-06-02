@@ -140,6 +140,8 @@ struct MainTabView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(tab.label)
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             }
         }
         .padding(.top, 8)
@@ -148,6 +150,8 @@ struct MainTabView: View {
         .overlay(alignment: .top) {
             Divider()
         }
+        // Espace contraint (6 onglets) : on plafonne la mise à l'échelle texte.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 }
 

@@ -28,6 +28,17 @@ struct MerchantCardView: View {
                 .stroke(Color.brandNavy.opacity(0.06), lineWidth: 1)
         )
         .shadow(color: Color.brandNavy.opacity(0.08), radius: 6, x: 0, y: 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [merchant.name]
+        if let description { parts.append(description) }
+        if merchant.acceptFidelityCard { parts.append("accepte la carte de fidélité") }
+        if merchant.acceptGiftCard { parts.append("accepte la carte cadeau") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Image + badges d'angle

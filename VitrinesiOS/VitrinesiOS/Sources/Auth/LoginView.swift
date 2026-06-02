@@ -83,6 +83,7 @@ struct LoginView: View {
                 .scaledToFit()
                 .frame(width: 180, height: 180)
                 .padding(.top, 32)
+                .accessibilityLabel("Les Vitrines d'Alençon")
             Text("Connectez-vous pour accéder à votre carte fidélité et vos avantages.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

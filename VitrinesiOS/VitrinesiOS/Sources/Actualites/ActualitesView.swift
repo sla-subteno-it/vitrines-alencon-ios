@@ -214,6 +214,8 @@ private struct BlogCard: View {
             }
         }
         .padding(.bottom, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 
     private var cover: some View {
