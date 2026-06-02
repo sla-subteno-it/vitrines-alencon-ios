@@ -2,10 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- ⚠️ Désactivé temporairement : compte Apple perso (gratuit) ne supporte pas
+	     Push Notifications ni Associated Domains. Réactiver dès le compte payant :
+
+	<key>aps-environment</key>
+	<string>production</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:www.vitrines-alencon.fr</string>
 		<string>webcredentials:vitrines-alencon.fr</string>
 	</array>
+	-->
 </dict>
 </plist>

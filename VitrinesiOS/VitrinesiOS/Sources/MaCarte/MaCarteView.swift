@@ -19,44 +19,15 @@ final class MaCarteViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var saveMessage: String?
 
-    @Published var events: [LoyaltyEvent] = []
+    // Historique / commerces visités — calculés côté serveur (endpoint JSON
+    // /my/loyalty/history) pour être à parité avec /ma-carte (sync Adelya + sudo).
     @Published var selectedPeriod: String?
     @Published var eventsError: String?
+    @Published var periods: [(key: String, label: String)] = []
+    @Published var history: [HistoryGroup] = []
+    @Published var visitedMerchants: [VisitedMerchant] = []
 
     private let client = OdooClient.shared
-    private var partnerId: Int?
-    private var cardId: Int?
-
-    // MARK: - Historique / Mes Commerces (dérivés des events)
-
-    var periods: [(key: String, label: String)] {
-        Set(events.compactMap { $0.yearMonth }).sorted(by: >).map { ($0, Self.periodLabel($0)) }
-    }
-
-    func historyGroups() -> [HistoryGroup] {
-        let evs = events.filter { selectedPeriod == nil || $0.yearMonth == selectedPeriod }
-        var byMerchant: [Int: HistoryGroup] = [:]
-        for e in evs {
-            guard let mid = e.merchantId else { continue }
-            var g = byMerchant[mid] ?? HistoryGroup(merchantId: mid, merchantName: e.merchantName ?? "",
-                                                    achatsCount: 0, achatsTotal: 0, latest: "")
-            if e.type == "addCA" { g.achatsCount += 1; g.achatsTotal += e.fvalue }
-            if (e.date ?? "") > g.latest { g.latest = e.date ?? "" }
-            byMerchant[mid] = g
-        }
-        return byMerchant.values.sorted { $0.latest > $1.latest }
-    }
-
-    var visitedMerchants: [VisitedMerchant] {
-        var byMerchant: [Int: VisitedMerchant] = [:]
-        for e in events {
-            guard let mid = e.merchantId else { continue }
-            var v = byMerchant[mid] ?? VisitedMerchant(merchantId: mid, merchantName: e.merchantName ?? "", lastDate: "")
-            if (e.date ?? "") > v.lastDate { v.lastDate = e.date ?? "" }
-            byMerchant[mid] = v
-        }
-        return byMerchant.values.sorted { $0.lastDate > $1.lastDate }
-    }
 
     static func periodLabel(_ ym: String) -> String {
         let parts = ym.split(separator: "-")
@@ -76,14 +47,12 @@ final class MaCarteViewModel: ObservableObject {
                 kwargs: ["domain": [["id", "=", uid]], "fields": ["partner_id"], "limit": 1]
             )
             guard let pid = users.first?.refId else { return }
-            partnerId = pid
 
             let partners: [CardPartnerRow] = try await client.call(
                 model: "res.partner", method: "search_read", args: [],
                 kwargs: ["domain": [["id", "=", pid]],
                          "fields": ["name", "first_name", "cardnumber",
-                                    "email_optin_status", "sms_optin_status",
-                                    "local_rewards_card_id"], "limit": 1]
+                                    "email_optin_status", "sms_optin_status"], "limit": 1]
             )
             guard let p = partners.first else { return }
             let sessionName = await OdooSession.shared.getUserName()
@@ -91,65 +60,40 @@ final class MaCarteViewModel: ObservableObject {
             cardNumber = p.cardnumber?.nilIfEmpty
             emailOptIn = (p.emailOptIn == "1")
             smsOptIn = (p.smsOptIn == "1")
-
-            cardId = p.cardId
-            if let cardId = p.cardId {
-                let cards: [CardTotalRow] = try await client.call(
-                    model: "local.rewards.card", method: "search_read", args: [],
-                    kwargs: ["domain": [["id", "=", cardId]],
-                             "fields": ["total_add_credit_amount"], "limit": 1]
-                )
-                balance = cards.first?.total
-            }
-
         } catch {
             // page reste affichable
         }
 
-        await loadEvents()
+        await loadHistory()
     }
 
-    /// Charge les events (historique + commerces visités) — erreur isolée et affichée.
-    func loadEvents() async {
-        guard let pid = partnerId else { return }
+    /// Charge l'historique d'achats, les commerces visités et le solde via
+    /// l'endpoint serveur (à parité avec /ma-carte). `period` nil = mois courant.
+    func loadHistory(period: String? = nil) async {
         do {
-            // Membres partageant la même carte (related_member_partner_ids)
-            var memberIds = [pid]
-            if let cardId {
-                let members: [IdRow] = try await client.call(
-                    model: "res.partner", method: "search_read", args: [],
-                    kwargs: ["domain": [["local_rewards_card_id", "=", cardId],
-                                        ["is_company", "=", false]],
-                             "fields": ["id"],
-                             "context": ["active_test": false]]
-                )
-                if !members.isEmpty { memberIds = members.map { $0.id } }
+            let params: [String: Any] = period.map { ["period": $0] } ?? [:]
+            let resp: LoyaltyHistoryResponse = try await client.callRoute("/my/loyalty/history", params: params)
+            periods = resp.periods.map { ($0.key, $0.label) }
+            selectedPeriod = resp.selectedPeriod
+            history = resp.history.map {
+                HistoryGroup(merchantId: $0.merchantId, merchantName: $0.merchantName,
+                             achatsCount: $0.count, achatsTotal: $0.total, latest: "")
             }
-
-            let evs: [LoyaltyEvent] = try await client.call(
-                model: "local.rewards.event", method: "search_read", args: [],
-                kwargs: ["domain": [["member_id", "in", memberIds],
-                                    ["type", "in", ["addCA", "addCredit"]]],
-                         "fields": ["merchant_id", "date", "fvalue", "year_month", "type"],
-                         "order": "date desc", "limit": 1000]
-            )
-            events = evs
+            visitedMerchants = resp.visited.map {
+                VisitedMerchant(merchantId: $0.merchantId, merchantName: $0.merchantName, lastDate: $0.last)
+            }
+            if let credit = resp.cumulCredit { balance = credit }
             eventsError = nil
-            if selectedPeriod == nil { selectedPeriod = periods.first?.key }
         } catch {
             eventsError = (error as? OdooError)?.errorDescription ?? error.localizedDescription
         }
     }
 
     func savePreferences() async {
-        guard let pid = partnerId else { return }
         do {
-            let _: Bool = try await client.call(
-                model: "res.partner", method: "write",
-                args: [[pid], ["email_optin_status": emailOptIn ? "1" : "0",
-                               "sms_optin_status": smsOptIn ? "1" : "0"]],
-                kwargs: [:]
-            )
+            // Les utilisateurs portail ne peuvent pas écrire res.partner via call_kw :
+            // on passe par le formulaire portail /ma-carte (qui met aussi à jour Adelya).
+            try await client.saveCommunicationPreferences(emailOptin: emailOptIn, smsOptin: smsOptIn)
             saveMessage = "Préférences enregistrées."
         } catch {
             saveMessage = (error as? OdooError)?.errorDescription ?? "Échec de l'enregistrement."
@@ -210,29 +154,41 @@ private struct CardTotalRow: Decodable {
     }
 }
 
-struct LoyaltyEvent: Decodable {
-    let merchantId: Int?
-    let merchantName: String?
-    let date: String?
-    let fvalue: Double
-    let yearMonth: String?
-    let type: String
+// MARK: - Réponse de l'endpoint /my/loyalty/history
 
+struct LoyaltyHistoryResponse: Decodable {
+    let cumulCredit: Double?
+    let selectedPeriod: String?
+    let periods: [PeriodDTO]
+    let history: [MerchantTotalDTO]
+    let visited: [VisitedDTO]
     enum CodingKeys: String, CodingKey {
-        case merchantId = "merchant_id"
-        case date, fvalue, type
-        case yearMonth = "year_month"
+        case cumulCredit = "cumul_credit"
+        case selectedPeriod = "selected_period"
+        case periods, history, visited
     }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        date = try? c.decode(String.self, forKey: .date)
-        fvalue = (try? c.decode(Double.self, forKey: .fvalue)) ?? 0
-        yearMonth = try? c.decode(String.self, forKey: .yearMonth)
-        type = (try? c.decode(String.self, forKey: .type)) ?? ""
-        if var m2o = try? c.nestedUnkeyedContainer(forKey: .merchantId) {
-            merchantId = try? m2o.decode(Int.self)
-            merchantName = try? m2o.decode(String.self)
-        } else { merchantId = nil; merchantName = nil }
+}
+
+struct PeriodDTO: Decodable { let key: String; let label: String }
+
+struct MerchantTotalDTO: Decodable {
+    let merchantId: Int
+    let merchantName: String
+    let total: Double
+    let count: Int
+    enum CodingKeys: String, CodingKey {
+        case merchantId = "merchant_id", merchantName = "merchant_name", total, count
+    }
+}
+
+struct VisitedDTO: Decodable {
+    let merchantId: Int
+    let merchantName: String
+    let total: Double
+    let count: Int
+    let last: String
+    enum CodingKeys: String, CodingKey {
+        case merchantId = "merchant_id", merchantName = "merchant_name", total, count, last
     }
 }
 
@@ -421,7 +377,7 @@ struct MaCarteView: View {
         } else {
             Menu {
                 ForEach(viewModel.periods, id: \.key) { p in
-                    Button(p.label) { viewModel.selectedPeriod = p.key }
+                    Button(p.label) { Task { await viewModel.loadHistory(period: p.key) } }
                 }
             } label: {
                 HStack {
@@ -436,7 +392,7 @@ struct MaCarteView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.brandNavy.opacity(0.12), lineWidth: 1))
             }
 
-            let groups = viewModel.historyGroups()
+            let groups = viewModel.history
             if groups.isEmpty {
                 emptyHistory("Aucun achat sur cette période.")
             } else {
@@ -492,7 +448,7 @@ struct MaCarteView: View {
                             .font(BrandFont.serif(16, weight: .bold))
                             .foregroundStyle(Color.brandNavy)
                             .lineLimit(1)
-                        Label("Dernière visite : \(Self.shortDate(m.lastDate))", systemImage: "clock")
+                        Label(m.lastDate.isEmpty ? "" : "Dernière visite : \(m.lastDate)", systemImage: "clock")
                             .font(BrandFont.sans(12))
                             .foregroundStyle(Color.brandTextMuted)
                             .lineLimit(1)

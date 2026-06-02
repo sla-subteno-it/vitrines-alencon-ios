@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B0A5E91A000000000000A003 /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = B0A5E91A000000000000A002 /* OneSignalFramework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		B04A236C2FCC52A300694D7E /* VitrinesiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VitrinesiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -41,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B0A5E91A000000000000A003 /* OneSignalFramework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +88,7 @@
 			);
 			name = VitrinesiOS;
 			packageProductDependencies = (
+				B0A5E91A000000000000A002 /* OneSignalFramework */,
 			);
 			productName = VitrinesiOS;
 			productReference = B04A236C2FCC52A300694D7E /* VitrinesiOS.app */;
@@ -112,6 +118,9 @@
 			);
 			mainGroup = B04A23632FCC52A300694D7E;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B0A5E91A000000000000A001 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B04A236D2FCC52A300694D7E /* Products */;
 			projectDirPath = "";
@@ -269,7 +278,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = VitrinesiOS.Debug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TTF2YC5Q54;
@@ -304,7 +312,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = VitrinesiOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TTF2YC5Q54;
@@ -356,6 +363,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B0A5E91A000000000000A001 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/OneSignal/OneSignal-iOS-SDK";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B0A5E91A000000000000A002 /* OneSignalFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B0A5E91A000000000000A001 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */;
+			productName = OneSignalFramework;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B04A23642FCC52A300694D7E /* Project object */;
 }

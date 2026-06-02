@@ -7,21 +7,37 @@ import Foundation
 
 // MARK: - Configuration
 
+/// Environnement serveur (sélectionnable en DEBUG depuis l'écran de connexion).
+enum OdooEnvironment: String, CaseIterable, Identifiable {
+    case staging, prod
+    var id: String { rawValue }
+    var label: String { self == .staging ? "Staging" : "Production" }
+    var baseURL: String {
+        switch self {
+        case .staging: return "https://staging.vitrines-alencon.fr"
+        case .prod:    return "https://www.vitrines-alencon.fr"
+        }
+    }
+}
+
 enum OdooConfig {
 #if DEBUG
-    // Build Debug (lancé depuis Xcode) → serveur de staging (Odoo.sh)
-    // On vise l'URL Odoo.sh native (cert *.dev.odoo.com valide) et non
-    // staging.vitrines-alencon.fr, dont le domaine custom n'a pas encore
-    // de certificat provisionné → erreur TLS sinon.
-    static let baseURL  = "https://subteno-it-vitrines-alencon-staging-32921774.dev.odoo.com"
-    static let database = "subteno-it-vitrines-alencon-staging-32921774"
+    private static let envKey = "odoo_environment"
+    /// Environnement courant (persisté). Par défaut : staging en debug.
+    static var environment: OdooEnvironment {
+        get { OdooEnvironment(rawValue: UserDefaults.standard.string(forKey: envKey) ?? "") ?? .staging }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: envKey) }
+    }
+    static var baseURL: String { environment.baseURL }
 #else
-    // Build Release / TestFlight / App Store → production
-    static let baseURL  = "https://www.vitrines-alencon.fr"
-    static let database = "subteno-it-vitrines-alencon-master-25376606"
+    // Build Release / TestFlight / App Store → toujours la production.
+    static let baseURL = "https://www.vitrines-alencon.fr"
 #endif
+    // La base est auto-détectée via /web/database/list (une seule base par
+    // instance) — pas besoin de la coder en dur.
     static let jsonRPCPath = "/web/dataset/call_kw"
     static let sessionPath = "/web/session/authenticate"
+    static let databaseListPath = "/web/database/list"
 }
 
 // MARK: - Erreurs
@@ -165,17 +181,46 @@ final class OdooClient {
 
     private init() {}
 
+    /// Nom de la base mis en cache après première détection.
+    private var cachedDatabase: String?
+
+    // MARK: - Base de données (mono-base auto-détectée)
+
+    /// Récupère le nom de la base via `/web/database/list` (une seule base par
+    /// instance Odoo.sh). Mis en cache pour les appels suivants.
+    func resolveDatabase() async throws -> String {
+        if let cachedDatabase { return cachedDatabase }
+        guard let url = URL(string: OdooConfig.baseURL + OdooConfig.databaseListPath) else {
+            throw OdooError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["jsonrpc": "2.0", "method": "call", "params": [:]])
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let list = json["result"] as? [String], let db = list.first else {
+            throw OdooError.odooError(code: -1, message: "Base de données introuvable.")
+        }
+        cachedDatabase = db
+        return db
+    }
+
     // MARK: - Authentification
 
     func authenticate(login: String, password: String) async throws -> Int {
         let url = URL(string: OdooConfig.baseURL + OdooConfig.sessionPath)!
+        let database = try await resolveDatabase()
 
         let body: [String: Any] = [
             "jsonrpc": "2.0",
             "method": "call",
             "id": 1,
             "params": [
-                "db": OdooConfig.database,
+                "db": database,
                 "login": login,
                 "password": password
             ]
@@ -241,6 +286,14 @@ final class OdooClient {
     }
 
     func logout() async {
+        await OdooSession.shared.clear()
+        HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+    }
+
+    /// Réinitialise session, cookies et base mise en cache — à appeler lors d'un
+    /// changement d'environnement (staging ↔ prod) en debug.
+    func resetForEnvironmentSwitch() async {
+        cachedDatabase = nil
         await OdooSession.shared.clear()
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
     }
@@ -547,6 +600,99 @@ final class OdooClient {
             throw OdooError.odooError(code: -1, message: err)
         }
         throw OdooError.odooError(code: -1, message: "La création du compte a échoué. Vérifiez vos informations et réessayez.")
+    }
+
+    // MARK: - Notifications push (OneSignal → Odoo)
+
+    private func postJSON(path: String, body: [String: Any]) async {
+        guard let url = URL(string: OdooConfig.baseURL + path) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        _ = try? await session.data(for: request)
+    }
+
+    /// Enregistre l'abonnement push auprès d'Odoo (`/onesignal/subscribe`).
+    /// La session courante permet de lier l'abonnement au partenaire connecté.
+    func registerPushPlayer(playerId: String, deviceType: String = "ios") async {
+        await postJSON(path: "/onesignal/subscribe",
+                       body: ["player_id": playerId, "device_type": deviceType])
+    }
+
+    /// Désactive l'abonnement push côté Odoo (`/onesignal/unsubscribe`).
+    func unregisterPushPlayer(playerId: String) async {
+        await postJSON(path: "/onesignal/unsubscribe", body: ["player_id": playerId])
+    }
+
+    // MARK: - Compte portail (infos perso, sécurité)
+
+    /// Enregistre les informations personnelles / adresse principale via le
+    /// formulaire portail Odoo (`/my/address/submit`).
+    func savePersonalInfo(partnerId: Int, fields: [String: String]) async throws {
+        guard let csrf = await websiteCSRFToken(path: "/my/account") else {
+            throw OdooError.invalidResponse
+        }
+        var params = fields
+        params["csrf_token"] = csrf
+        params["address_type"] = "billing"
+        params["use_delivery_as_billing"] = "True"
+        params["partner_id"] = String(partnerId)
+        params["callback"] = "/my"
+        params["required_fields"] = "name,email"
+
+        let (code, html) = try await postForm(path: "/my/address/submit", params: params)
+        guard code == 200 || code == 302 || code == 303 else { throw OdooError.invalidResponse }
+        if let err = firstAlertText(in: html, kind: "alert-danger") {
+            throw OdooError.odooError(code: -1, message: err)
+        }
+    }
+
+    /// Change le mot de passe via le formulaire portail (`/my/security`).
+    func changePassword(old: String, new: String) async throws {
+        guard let csrf = await websiteCSRFToken(path: "/my/security") else {
+            throw OdooError.invalidResponse
+        }
+        let (code, html) = try await postForm(path: "/my/security", params: [
+            "op": "password", "old": old, "new1": new, "new2": new, "csrf_token": csrf
+        ])
+        guard code == 200 || code == 302 || code == 303 else { throw OdooError.invalidResponse }
+        if let err = firstAlertText(in: html, kind: "alert-danger") {
+            throw OdooError.odooError(code: -1, message: err)
+        }
+    }
+
+    /// Enregistre les préférences de communication (opt-in email/SMS) via le
+    /// formulaire portail `/ma-carte` (met aussi à jour Adelya côté serveur).
+    func saveCommunicationPreferences(emailOptin: Bool, smsOptin: Bool) async throws {
+        guard let csrf = await websiteCSRFToken(path: "/ma-carte") else {
+            throw OdooError.invalidResponse
+        }
+        guard let url = URL(string: OdooConfig.baseURL + "/ma-carte") else {
+            throw OdooError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = formURLEncoded([
+            "action": "update_communication_preferences",
+            "email_optin": emailOptin ? "1" : "0",
+            "sms_optin": smsOptin ? "1" : "0",
+            "csrf_token": csrf
+        ])
+
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw OdooError.invalidResponse }
+        let finalURL = response.url?.absoluteString ?? ""
+
+        if finalURL.contains("success=1") { return }
+        if finalURL.contains("error=") {
+            let msg = URLComponents(string: finalURL)?
+                .queryItems?.first(where: { $0.name == "error" })?.value?
+                .removingPercentEncoding
+            throw OdooError.odooError(code: -1, message: msg ?? "Échec de la mise à jour des préférences.")
+        }
+        guard http.statusCode == 200 else { throw OdooError.invalidResponse }
     }
 
     // MARK: - URL image Odoo
