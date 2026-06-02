@@ -1,71 +1,121 @@
 # Vitrines d'Alençon — iOS
 
-Application iOS native pour [Les Vitrines d'Alençon](https://www.vitrines-alencon.fr), programme de cashback et annuaire des commerçants du centre-ville d'Alençon.
+Application iOS native pour [Les Vitrines d'Alençon](https://www.vitrines-alencon.fr) :
+programme de cashback/fidélité et annuaire des commerçants du centre-ville d'Alençon.
+Réplique native de la PWA, connectée **uniquement à Odoo**.
 
 ## Architecture
 
 ```
-VitrinesiOS/
-├── Sources/
-│   ├── Network/          # OdooClient (JSON-RPC), couche HTTP unique
-│   ├── Models/           # Structures Swift (Merchant, RewardsTag, Coupon...)
-│   ├── Auth/             # Connexion / Inscription / Mon Compte
-│   ├── Merchants/        # Annuaire commerçants + fiche détail
-│   ├── MaCarte/          # Cagnotte, historique, carte fidélité QR
-│   ├── BonsPlans/        # Offres et coupons actifs
-│   ├── Jeux/             # Jeux interactifs (quiz, chasse au trésor)
-│   ├── Notifications/    # Centre de notifications in-app + APNs
-│   └── Common/           # Composants UI réutilisables
-├── Resources/
-│   └── Assets.xcassets
-└── Preview Content/
+VitrinesiOS/VitrinesiOS/
+├── VitrinesiOSApp.swift        # @main (init polices + OneSignal)
+├── ContentView.swift           # Splash / Accueil public / MainTabView selon l'auth
+└── Sources/
+    ├── Network/                # OdooClient (JSON-RPC, auth, routes custom), config
+    ├── Models/                 # Merchant, MerchantCoupon, RewardsTag…
+    ├── Auth/                   # LoginView, inscription (CreateCard), activation, AuthViewModel
+    ├── Accueil/                # Dashboard connecté + accueil public (non connecté)
+    ├── Merchants/              # Annuaire (liste, filtres, marques, fiche détail, coupon)
+    ├── BonsPlans/              # Offres/coupons actifs + expirés
+    ├── Actualites/             # Blog (liste + article)
+    ├── Notifications/          # Centre de notifications + PushManager + deep-link
+    ├── MaCarte/                # Carte fidélité (code-barres), solde, historique, commerces
+    ├── CarteCadeau/            # Scan carte cadeau (VisionKit) + solde/historique
+    ├── Compte/                 # Infos perso, adresses, sécurité, préférences, suppression
+    ├── Aide/                   # Aide / FAQ
+    ├── Contact/                # Formulaire de contact
+    └── Common/                 # MainTabView, Theme, cache carte, composants partagés
 ```
+
+Patterns : SwiftUI + MVVM, `async/await`, `NavigationStack` (path par onglet),
+`@StateObject` / `ObservableObject`.
 
 ## Stack technique
 
 | Composant | Technologie |
 |---|---|
-| UI | SwiftUI (iOS 16+) |
+| UI | SwiftUI |
+| Cible de déploiement | iOS 26 (fonctionnalités iOS 17+) |
 | Réseau | URLSession + JSON-RPC Odoo |
-| Auth | Session cookie Odoo |
-| Push | APNs natif |
-| QR Scanner | AVFoundation |
-| Architecture | MVVM + async/await |
+| Auth | Session cookie Odoo (persistée) |
+| Push | OneSignal (SDK SPM) → APNs |
+| Scan code-barres | VisionKit `DataScannerViewController` |
+| Code-barres carte | CoreImage (Code128, généré localement) |
+| Polices | Playfair Display + Montserrat (embarquées) |
+
+## Dépendances
+
+- **OneSignal iOS SDK** via Swift Package Manager
+  (`https://github.com/OneSignal/OneSignal-iOS-SDK`, produit `OneSignalFramework`).
+  Le code push est protégé par `#if canImport(OneSignalFramework)` : le projet
+  compile même sans le package.
+
+Aucune autre dépendance tierce.
 
 ## Backend
 
-L'app iOS communique **uniquement avec Odoo** (`https://www.vitrines-alencon.fr`).  
-Odoo gère la connexion à Adelya (programme de fidélité) en coulisses.
+L'app communique **uniquement avec Odoo** ; Odoo orchestre Adelya (fidélité) en coulisses.
+
+- **Base de données auto-détectée** via `/web/database/list` (une seule base par
+  instance) — rien à coder en dur.
+- Endpoints Odoo utilisés :
+  - `/web/session/authenticate`, `/web/dataset/call_kw` (générique)
+  - `/my/loyalty/history` *(custom)* — historique d'achats + commerces + solde
+    (agrégé sur tous les partenaires liés au `cardnumber`, multi-sociétés)
+  - `/onesignal/config`, `/onesignal/subscribe`, `/onesignal/unsubscribe`
+  - `/scanner-carte-cadeau/scan` — scan/solde carte cadeau
+  - `/website/form/mail.mail` — formulaire de contact
+  - `/web/signup`, `/activer-mon-compte`, `/my/account`, `/my/security`,
+    `/ma-carte` (préférences), `/my/deactivate_account` (suppression de compte)
+  - `/.well-known/apple-app-site-association` (AutoFill mot de passe)
+
+## Environnements
+
+- **Release** → production `https://www.vitrines-alencon.fr`.
+- **Debug** → staging `https://staging.vitrines-alencon.fr`, avec un **sélecteur
+  Staging/Production** sur l'écran de connexion (persisté).
 
 ## Prérequis
 
-- Xcode 15+
-- iOS 16+ (cible de déploiement)
-- Compte Apple Developer (pour déploiement device réel)
+- Xcode 16+
+- **Compte Apple Developer payant** requis pour : Push Notifications, Associated
+  Domains (AutoFill), build device au-delà de 7 jours, TestFlight.
+  (Un compte personnel gratuit permet de tester en local, sans push ni AutoFill.)
 
 ## Démarrage rapide
 
 ```bash
 git clone https://github.com/sla-subteno-it/vitrines-alencon-ios.git
 cd vitrines-alencon-ios
-open VitrinesiOS.xcodeproj
+open VitrinesiOS/VitrinesiOS.xcodeproj
 ```
 
-## Modules développés
+Xcode résout automatiquement le package OneSignal. Build : ⌘R.
 
-- [x] Couche réseau Odoo (OdooClient)
-- [x] Modèles de données (Merchant, RewardsTag...)
-- [x] Service commerçants (MerchantService)
-- [x] ViewModel commerçants (MerchantsViewModel, MerchantDetailViewModel)
-- [ ] Vue liste commerçants (SwiftUI)
-- [ ] Vue fiche détail commerçant (SwiftUI)
-- [ ] Authentification
-- [ ] Ma Carte / Cagnotte
-- [ ] Bons Plans
-- [ ] Jeux Interactifs
-- [ ] Notifications Push
+## Fonctionnalités
+
+- [x] Accueil public (non connecté) + connexion / inscription / activation
+- [x] Dashboard d'accueil connecté
+- [x] Annuaire commerçants (recherche, filtres, marques, fiche détail, avis)
+- [x] Bons plans (actifs / durée limitée / terminés) + détail + compte à rebours
+- [x] Actualités (blog)
+- [x] Notifications (liste, filtres, ouverture du contenu)
+- [x] Ma Carte : carte fidélité + **code-barres hors-ligne**, solde, historique
+- [x] Carte cadeau : scan code-barres, solde, historique
+- [x] Mon Compte : infos perso, adresses, sécurité, préférences de communication
+- [x] Suppression de compte in-app + liens légaux (confidentialité, mentions)
+- [x] Mode hors-ligne (session persistée + carte en cache)
+- [x] Accessibilité : Dynamic Type + VoiceOver
+- [~] Notifications push (OneSignal) + deep-link — *prêt, en attente du compte Apple*
+- [~] AutoFill mot de passe (Associated Domains) — *prêt, en attente du compte Apple*
+
+## Documentation complémentaire
+
+- `PUSH_ONESIGNAL.md` — mise en place des notifications push (APNs, dashboard).
+- `ASSOCIATED_DOMAINS.md` — AutoFill mot de passe (entitlements + AASA serveur).
+- `apple-app-site-association` — fichier de référence à servir côté Odoo.
 
 ## Développé par
 
-[Subteno IT](https://www.subteno.com) — Partenaire Odoo Silver  
-Pour [Les Vitrines d'Alençon](https://www.vitrines-alencon.fr)
+[Subteno IT](https://www.subteno.com) — Partenaire Odoo
+pour [Les Vitrines d'Alençon](https://www.vitrines-alencon.fr).
