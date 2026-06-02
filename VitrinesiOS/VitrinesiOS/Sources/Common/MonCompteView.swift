@@ -113,6 +113,9 @@ struct MonCompteView: View {
     @StateObject private var viewModel = MonCompteViewModel()
     @State private var showCard = false
 
+    /// Permet de basculer vers un autre onglet (ex. Notifications).
+    var selectTab: (MainTabView.Tab) -> Void = { _ in }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -126,19 +129,31 @@ struct MonCompteView: View {
                     .buttonStyle(.plain)
 
                     sectionTitle("Actions rapides")
-                    AccountRow(icon: "bell", title: "Notifications")
+                    AccountRow(icon: "bell", title: "Notifications") { selectTab(.notifs) }
                     NavigationLink { CarteCadeauView() } label: {
                         AccountRowLabel(icon: "gift", title: "Carte cadeau")
                     }
                     .buttonStyle(.plain)
 
                     sectionTitle("Mon profil")
-                    AccountRow(icon: "person", title: "Mes infos personnelles")
-                    AccountRow(icon: "mappin.and.ellipse", title: "Mes adresses")
-                    AccountRow(icon: "lock", title: "Connexion et sécurité")
+                    NavigationLink { PersonalInfoView() } label: {
+                        AccountRowLabel(icon: "person", title: "Mes infos personnelles")
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { AddressesView() } label: {
+                        AccountRowLabel(icon: "mappin.and.ellipse", title: "Mes adresses")
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { SecurityView() } label: {
+                        AccountRowLabel(icon: "lock", title: "Connexion et sécurité")
+                    }
+                    .buttonStyle(.plain)
 
                     sectionTitle("Mes préférences")
-                    AccountRow(icon: "megaphone", title: "Préférences de communication")
+                    NavigationLink { CommunicationPreferencesView() } label: {
+                        AccountRowLabel(icon: "megaphone", title: "Préférences de communication")
+                    }
+                    .buttonStyle(.plain)
 
                     sectionTitle("Besoin d'aide ?")
                     NavigationLink { AideFaqView() } label: {

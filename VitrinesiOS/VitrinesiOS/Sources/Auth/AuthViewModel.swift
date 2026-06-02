@@ -39,6 +39,7 @@ final class AuthViewModel: ObservableObject {
         isAuthenticated = await client.restoreSession()
         if isAuthenticated {
             userName = await OdooSession.shared.getUserName()
+            await PushManager.shared.registerWithBackend()
         }
         isInitializing = false
     }
@@ -61,6 +62,8 @@ final class AuthViewModel: ObservableObject {
             userName = await OdooSession.shared.getUserName()
             password = ""
             isAuthenticated = true
+            PushManager.shared.requestPermission()
+            await PushManager.shared.registerWithBackend()
         } catch {
             errorMessage = (error as? OdooError)?.errorDescription ?? error.localizedDescription
         }
@@ -72,12 +75,15 @@ final class AuthViewModel: ObservableObject {
         isAuthenticated = await client.restoreSession()
         if isAuthenticated {
             userName = await OdooSession.shared.getUserName()
+            PushManager.shared.requestPermission()
+            await PushManager.shared.registerWithBackend()
         }
     }
 
     // MARK: - Déconnexion
 
     func logout() async {
+        await PushManager.shared.unregisterFromBackend()
         await client.logout()
         email = ""
         password = ""

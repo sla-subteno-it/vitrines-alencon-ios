@@ -11,6 +11,7 @@ import SwiftUI
 struct VitrinesiOSApp: App {
     init() {
         BrandFont.registerEmbeddedFonts()
+        PushManager.shared.start()
     }
 
     var body: some Scene {

@@ -29,6 +29,9 @@ extension View {
 struct MainTabView: View {
     @State private var selected: Tab = .accueil
     @State private var visited: Set<Tab> = [.accueil]
+    /// Incrémenté à chaque tap sur un bouton d'onglet pour réinitialiser sa pile
+    /// de navigation (retour à la page racine, pas l'écran de détail précédent).
+    @State private var resetCounters: [Tab: Int] = [:]
 
     enum Tab: Int, CaseIterable, Identifiable {
         case accueil, merchants, deals, news, notifs, account
@@ -62,6 +65,7 @@ struct MainTabView: View {
             ForEach(Tab.allCases) { tab in
                 if visited.contains(tab) {
                     content(for: tab)
+                        .id(resetCounters[tab, default: 0])
                         .opacity(tab == selected ? 1 : 0)
                         .allowsHitTesting(tab == selected)
                 }
@@ -79,7 +83,7 @@ struct MainTabView: View {
         case .deals:     BonsPlansListView()
         case .news:      ActualitesView()
         case .notifs:    NotificationsView()
-        case .account:   MonCompteView()
+        case .account:   MonCompteView(selectTab: { selected = $0 })
         }
     }
 
@@ -88,6 +92,9 @@ struct MainTabView: View {
             ForEach(Tab.allCases) { tab in
                 let isSelected = selected == tab
                 Button {
+                    // Tap sur un bouton d'onglet → revenir à la page racine de
+                    // cet onglet (réinitialise sa pile de navigation).
+                    resetCounters[tab, default: 0] += 1
                     selected = tab
                 } label: {
                     VStack(spacing: 4) {

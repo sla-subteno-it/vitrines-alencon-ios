@@ -10,12 +10,19 @@ struct LoginView: View {
 
     private enum Field { case email, password }
 
+    #if DEBUG
+    @State private var environment: OdooEnvironment = OdooConfig.environment
+    #endif
+
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
                 header
 
                 VStack(spacing: 16) {
+                    #if DEBUG
+                    debugEnvironmentPicker
+                    #endif
                     emailField
                     passwordField
 
@@ -41,6 +48,33 @@ struct LoginView: View {
 
     // MARK: - Sous-vues
 
+    #if DEBUG
+    private var debugEnvironmentPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Environnement (debug)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("Environnement", selection: $environment) {
+                ForEach(OdooEnvironment.allCases) { env in
+                    Text(env.label).tag(env)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: environment) { _, newValue in
+                OdooConfig.environment = newValue
+                auth.email = ""
+                auth.password = ""
+                auth.errorMessage = nil
+                Task { await OdooClient.shared.resetForEnvironmentSwitch() }
+            }
+            Text(OdooConfig.baseURL)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.bottom, 4)
+    }
+    #endif
+
     private var header: some View {
         VStack(spacing: 12) {
             Image("VitrinesLogo")
@@ -60,7 +94,7 @@ struct LoginView: View {
             Text("Identifiant")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            TextField("email@exemple.fr", text: $auth.email)
+            TextField("", text: $auth.email)
                 .textContentType(.username)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
