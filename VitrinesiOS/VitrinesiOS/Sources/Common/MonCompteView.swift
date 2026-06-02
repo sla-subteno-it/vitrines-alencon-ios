@@ -121,6 +121,7 @@ struct MonCompteView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var viewModel = MonCompteViewModel()
     @State private var showCard = false
+    @Environment(\.openURL) private var openURL
 
     /// Permet de basculer vers un autre onglet (ex. Notifications).
     var selectTab: (MainTabView.Tab) -> Void = { _ in }
@@ -171,6 +172,18 @@ struct MonCompteView: View {
                     .buttonStyle(.plain)
                     NavigationLink { ContactView() } label: {
                         AccountRowLabel(icon: "bubble.left.and.bubble.right", title: "Contactez-nous")
+                    }
+                    .buttonStyle(.plain)
+
+                    sectionTitle("Confidentialité")
+                    AccountRow(icon: "hand.raised", title: "Politique de confidentialité") {
+                        openURL(URL(string: "https://www.vitrines-alencon.fr/confidentialite")!)
+                    }
+                    AccountRow(icon: "doc.text", title: "Mentions légales") {
+                        openURL(URL(string: "https://www.vitrines-alencon.fr/mentions-legales")!)
+                    }
+                    NavigationLink { DeleteAccountView() } label: {
+                        AccountRowLabel(icon: "trash", title: "Supprimer mon compte", tint: .red)
                     }
                     .buttonStyle(.plain)
 
@@ -269,17 +282,18 @@ struct MonCompteView: View {
 struct AccountRowLabel: View {
     let icon: String
     let title: String
+    var tint: Color = .primary
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .font(.system(size: 18))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(tint)
                     .frame(width: 24)
                 Text(title)
                     .font(BrandFont.sans(16))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(tint)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.footnote)

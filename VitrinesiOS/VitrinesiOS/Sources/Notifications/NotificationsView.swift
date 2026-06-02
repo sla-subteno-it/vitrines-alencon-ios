@@ -207,9 +207,13 @@ final class NotificationsViewModel: ObservableObject {
 
 struct NotificationsView: View {
     @StateObject private var viewModel = NotificationsViewModel()
+    @State private var path = NavigationPath()
+
+    /// Incrémenté par le tab bar → revenir à la racine (sans recharger).
+    var popTrigger: Int = 0
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Notifications")
@@ -265,6 +269,7 @@ struct NotificationsView: View {
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
         }
+        .onChange(of: popTrigger) { _, _ in path = NavigationPath() }
     }
 
     private func destination(for n: NotifEvent) -> NotifDestination? {

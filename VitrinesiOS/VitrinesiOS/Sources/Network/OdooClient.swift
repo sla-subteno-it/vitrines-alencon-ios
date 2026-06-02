@@ -710,6 +710,28 @@ final class OdooClient {
         guard http.statusCode == 200 else { throw OdooError.invalidResponse }
     }
 
+    /// Supprime (désactive) le compte via le portail Odoo (`/my/deactivate_account`).
+    /// `confirmation` doit correspondre à l'identifiant (email) de l'utilisateur.
+    /// `blacklist` = retirer aussi les coordonnées des communications (RGPD).
+    func deleteAccount(password: String, confirmation: String, blacklist: Bool) async throws {
+        guard let csrf = await websiteCSRFToken(path: "/my/security") else {
+            throw OdooError.invalidResponse
+        }
+        var params = [
+            "password": password,
+            "validation": confirmation,
+            "csrf_token": csrf
+        ]
+        if blacklist { params["request_blacklist"] = "on" }
+
+        let (code, html) = try await postForm(path: "/my/deactivate_account", params: params)
+        guard code == 200 || code == 302 || code == 303 else { throw OdooError.invalidResponse }
+        if let err = firstAlertText(in: html, kind: "alert-danger") {
+            throw OdooError.odooError(code: -1, message: err)
+        }
+        // Succès : le compte est désactivé et la session invalidée côté serveur.
+    }
+
     // MARK: - URL image Odoo
 
     func imageURL(model: String, recordId: Int, field: String = "image_1920", size: String = "400x400") -> URL? {
