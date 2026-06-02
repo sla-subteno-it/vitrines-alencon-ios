@@ -18,9 +18,9 @@ enum PushConfig {
 import OneSignalFramework
 
 @MainActor
-final class PushManager {
+final class PushManager: NSObject {
     static let shared = PushManager()
-    private init() {}
+    private override init() { super.init() }
 
     private var initialized = false
 
@@ -30,6 +30,8 @@ final class PushManager {
         initialized = true
         OneSignal.initialize(PushConfig.oneSignalAppID, withLaunchOptions: nil)
         OneSignal.User.pushSubscription.addObserver(self)
+        // Tap sur une notification → deep-link vers le contenu concerné.
+        OneSignal.Notifications.addClickListener(self)
     }
 
     /// Demande l'autorisation d'envoyer des notifications (renvoie vers les
@@ -55,6 +57,16 @@ extension PushManager: OSPushSubscriptionObserver {
     nonisolated func onPushSubscriptionDidChange(state: OSPushSubscriptionChangedState) {
         // L'ID d'abonnement peut arriver de façon asynchrone : (ré)enregistrer.
         Task { @MainActor in await PushManager.shared.registerWithBackend() }
+    }
+}
+
+extension PushManager: OSNotificationClickListener {
+    nonisolated func onClick(event: OSNotificationClickEvent) {
+        let data = event.notification.additionalData
+        let url = event.notification.launchURL
+        Task { @MainActor in
+            DeepLinkRouter.shared.handle(additionalData: data, launchURL: url)
+        }
     }
 }
 
