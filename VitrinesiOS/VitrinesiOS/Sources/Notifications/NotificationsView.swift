@@ -337,7 +337,7 @@ enum NotifDestination: Hashable {
 }
 
 /// Charge l'offre par id puis affiche la fiche bon plan.
-private struct CouponLoaderView: View {
+struct CouponLoaderView: View {
     let offerId: Int
     @State private var coupon: MerchantCoupon?
     @State private var failed = false
@@ -360,7 +360,7 @@ private struct CouponLoaderView: View {
 }
 
 /// Charge l'article par id puis affiche la fiche.
-private struct BlogLoaderView: View {
+struct BlogLoaderView: View {
     let postId: Int
     @StateObject private var vm = ActualitesViewModel()
     @State private var post: BlogPost?

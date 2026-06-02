@@ -33,6 +33,9 @@ struct MainTabView: View {
     /// de navigation (retour à la page racine, pas l'écran de détail précédent).
     @State private var resetCounters: [Tab: Int] = [:]
 
+    /// Deep-link au tap d'une notification push.
+    @ObservedObject private var deepLink = DeepLinkRouter.shared
+
     enum Tab: Int, CaseIterable, Identifiable {
         case accueil, merchants, deals, news, notifs, account
         var id: Int { rawValue }
@@ -72,6 +75,25 @@ struct MainTabView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
         .onChange(of: selected) { _, new in visited.insert(new) }
+        .fullScreenCover(item: $deepLink.pending) { link in
+            NavigationStack {
+                deepLinkDestination(link)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Fermer") { deepLink.pending = nil }
+                        }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func deepLinkDestination(_ link: DeepLink) -> some View {
+        switch link {
+        case .coupon(let id):   CouponLoaderView(offerId: id)
+        case .blog(let id):     BlogLoaderView(postId: id)
+        case .merchant(let id): MerchantDetailView(merchantId: id, merchantName: "")
+        }
     }
 
     @ViewBuilder
