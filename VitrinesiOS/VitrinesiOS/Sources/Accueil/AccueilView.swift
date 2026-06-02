@@ -103,9 +103,11 @@ struct AccueilView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var viewModel = AccueilViewModel()
     var selectTab: (MainTabView.Tab) -> Void = { _ in }
+    var popTrigger: Int = 0
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
@@ -129,6 +131,7 @@ struct AccueilView: View {
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
         }
+        .onChange(of: popTrigger) { _, _ in path = NavigationPath() }
     }
 
     // MARK: Header

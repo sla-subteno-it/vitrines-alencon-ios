@@ -65,7 +65,6 @@ struct MainTabView: View {
             ForEach(Tab.allCases) { tab in
                 if visited.contains(tab) {
                     content(for: tab)
-                        .id(resetCounters[tab, default: 0])
                         .opacity(tab == selected ? 1 : 0)
                         .allowsHitTesting(tab == selected)
                 }
@@ -78,12 +77,14 @@ struct MainTabView: View {
     @ViewBuilder
     private func content(for tab: Tab) -> some View {
         switch tab {
-        case .accueil:   AccueilView(selectTab: { selected = $0 })
-        case .merchants: MerchantsListView()
-        case .deals:     BonsPlansListView()
-        case .news:      ActualitesView()
-        case .notifs:    NotificationsView()
-        case .account:   MonCompteView(selectTab: { selected = $0 })
+        case .accueil:   AccueilView(selectTab: { selected = $0 }, popTrigger: resetCounters[.accueil, default: 0])
+        case .merchants: MerchantsListView(popTrigger: resetCounters[.merchants, default: 0])
+        case .deals:     BonsPlansListView(popTrigger: resetCounters[.deals, default: 0])
+        case .news:      ActualitesView(popTrigger: resetCounters[.news, default: 0])
+        case .notifs:    NotificationsView(popTrigger: resetCounters[.notifs, default: 0])
+        // Mon Compte : pages-formulaires en NavigationLink closure → recréation
+        // légère (peu de données, rechargement quasi instantané).
+        case .account:   MonCompteView(selectTab: { selected = $0 }).id(resetCounters[.account, default: 0])
         }
     }
 

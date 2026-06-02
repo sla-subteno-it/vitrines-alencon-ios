@@ -9,6 +9,10 @@ struct MerchantsListView: View {
     @StateObject private var viewModel = MerchantsViewModel()
     @State private var showFilters = false
     @State private var showMarques = false
+    @State private var path = NavigationPath()
+
+    /// Incrémenté par le tab bar → revenir à la racine (sans recharger).
+    var popTrigger: Int = 0
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -16,7 +20,7 @@ struct MerchantsListView: View {
     ]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
@@ -59,6 +63,7 @@ struct MerchantsListView: View {
             .task { await viewModel.loadAll() }
             .refreshable { await viewModel.loadAll() }
         }
+        .onChange(of: popTrigger) { _, _ in path = NavigationPath() }
     }
 
     // MARK: - Header éditorial
