@@ -5,6 +5,30 @@
 import Foundation
 import Combine
 
+/// Mémorise l'état « connecté » entre les lancements pour permettre l'usage
+/// hors-ligne (afficher la carte fidélité en cache même sans réseau).
+enum AuthStore {
+    private static let d = UserDefaults.standard
+    private static let kLoggedIn = "auth_logged_in"
+    private static let kUserName = "auth_user_name"
+
+    static var isLoggedIn: Bool {
+        get { d.bool(forKey: kLoggedIn) }
+        set { d.set(newValue, forKey: kLoggedIn) }
+    }
+    static var userName: String? {
+        get { d.string(forKey: kUserName) }
+        set {
+            if let v = newValue, !v.isEmpty { d.set(v, forKey: kUserName) }
+            else { d.removeObject(forKey: kUserName) }
+        }
+    }
+    static func clear() {
+        d.removeObject(forKey: kLoggedIn)
+        d.removeObject(forKey: kUserName)
+    }
+}
+
 @MainActor
 final class AuthViewModel: ObservableObject {
 
@@ -36,10 +60,21 @@ final class AuthViewModel: ObservableObject {
     /// Restaure une éventuelle session persistante au démarrage.
     func bootstrap() async {
         isInitializing = true
-        isAuthenticated = await client.restoreSession()
-        if isAuthenticated {
-            userName = await OdooSession.shared.getUserName()
+        switch await client.restoreSession() {
+        case .authenticated:
+            isAuthenticated = true
+            userName = await OdooSession.shared.getUserName() ?? AuthStore.userName
+            AuthStore.isLoggedIn = true
+            AuthStore.userName = userName
             await PushManager.shared.registerWithBackend()
+        case .offline:
+            // Pas de réseau : si l'utilisateur était connecté, on le garde
+            // connecté en mode hors-ligne (la carte fidélité en cache reste accessible).
+            isAuthenticated = AuthStore.isLoggedIn
+            if isAuthenticated { userName = AuthStore.userName }
+        case .expired:
+            isAuthenticated = false
+            AuthStore.clear()
         }
         isInitializing = false
     }
@@ -62,6 +97,8 @@ final class AuthViewModel: ObservableObject {
             userName = await OdooSession.shared.getUserName()
             password = ""
             isAuthenticated = true
+            AuthStore.isLoggedIn = true
+            AuthStore.userName = userName
             PushManager.shared.requestPermission()
             await PushManager.shared.registerWithBackend()
         } catch {
@@ -72,9 +109,11 @@ final class AuthViewModel: ObservableObject {
     /// Recharge l'état d'authentification depuis le cookie de session
     /// (à appeler après une inscription réussie qui a connecté l'utilisateur).
     func refreshSession() async {
-        isAuthenticated = await client.restoreSession()
-        if isAuthenticated {
+        if case .authenticated = await client.restoreSession() {
+            isAuthenticated = true
             userName = await OdooSession.shared.getUserName()
+            AuthStore.isLoggedIn = true
+            AuthStore.userName = userName
             PushManager.shared.requestPermission()
             await PushManager.shared.registerWithBackend()
         }
@@ -84,6 +123,8 @@ final class AuthViewModel: ObservableObject {
 
     func logout() async {
         await PushManager.shared.unregisterFromBackend()
+        LoyaltyCardStore.clear()
+        AuthStore.clear()
         await client.logout()
         email = ""
         password = ""
