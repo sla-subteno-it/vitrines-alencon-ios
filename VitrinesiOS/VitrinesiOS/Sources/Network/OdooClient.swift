@@ -253,28 +253,43 @@ final class OdooClient {
         return uid
     }
 
+    /// État de restauration de session au lancement.
+    enum SessionState {
+        case authenticated   // session valide côté serveur
+        case expired         // serveur joignable mais session invalide → déconnexion
+        case offline         // serveur injoignable (pas de réseau) → ne pas déconnecter
+    }
+
     /// Tente de restaurer une session existante depuis le cookie persistant
     /// (HTTPCookieStorage survit au redémarrage de l'app). À appeler au lancement.
-    @discardableResult
-    func restoreSession() async -> Bool {
+    /// Distingue le cas hors-ligne (réseau KO) du cas session réellement expirée.
+    func restoreSession() async -> SessionState {
         guard let url = URL(string: OdooConfig.baseURL + "/web/session/get_session_info") else {
-            return false
+            return .offline
         }
 
         let body: [String: Any] = ["jsonrpc": "2.0", "method": "call", "params": [:]]
-
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
-        guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            // Erreur réseau (avion, pas de connexion) → on ne touche pas à la session.
+            return .offline
+        }
+
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let result = json["result"] as? [String: Any],
               let uid = result["uid"] as? Int, uid > 0 else {
+            // Serveur joignable mais pas de session valide → expirée.
             await OdooSession.shared.clear()
-            return false
+            return .expired
         }
 
         let name = result["name"] as? String ?? result["username"] as? String
@@ -282,7 +297,7 @@ final class OdooClient {
             .first(where: { $0.name == "session_id" })?.value
 
         await OdooSession.shared.set(sessionId: sessionId, uid: uid, name: name)
-        return true
+        return .authenticated
     }
 
     func logout() async {
@@ -594,7 +609,7 @@ final class OdooClient {
         let (_, html) = try await postForm(path: "/web/signup", params: params)
 
         // Succès = session connectée (cookie posé par le POST).
-        if await restoreSession() { return }
+        if case .authenticated = await restoreSession() { return }
 
         if let err = firstAlertText(in: html, kind: "alert-danger") {
             throw OdooError.odooError(code: -1, message: err)

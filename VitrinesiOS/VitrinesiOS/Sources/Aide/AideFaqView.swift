@@ -140,7 +140,6 @@ struct AideFaqView: View {
             fidelitySection.id(Target.fidelity.anchor)
             activationSection.id(Target.activation.anchor)
             giftCardSection.id(Target.giftcard.anchor)
-            installSection
             contactSection
         }
         .padding(16)
@@ -300,25 +299,6 @@ struct AideFaqView: View {
                     answerText("La validité est indiquée sur votre carte. Vérifiez-la via notre scanner.")
                     TipBox(style: .warning, icon: "exclamationmark.triangle.fill",
                            text: "Pensez à utiliser votre carte avant expiration, le solde ne sera pas remboursé.")
-                }
-            }
-        }
-    }
-
-    // MARK: Section 4 — Installation
-
-    private var installSection: some View {
-        FaqSection(icon: "iphone", tint: Color(hex: 0xF57C00),
-                   bg: Color(hex: 0xFFF3E0), title: "Installer le site en application") {
-            faqRow("i1", "Comment installer le site sur mon téléphone comme une application ?") {
-                VStack(alignment: .leading, spacing: 12) {
-                    answerText("Vous pouvez ajouter Les Vitrines d'Alençon sur l'écran d'accueil de votre téléphone pour y accéder en un clic, comme une application.")
-                    AnswerOption(icon: "applelogo", title: "Sur iPhone ou iPad (Safari)",
-                                 text: "Ouvrez le site dans Safari, appuyez sur Partager, puis « Sur l'écran d'accueil » et « Ajouter ».")
-                    AnswerOption(icon: "smartphone", title: "Sur Android (Chrome)",
-                                 text: "Ouvrez le menu ⋮, puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».")
-                    TipBox(style: .success, icon: "star.fill",
-                           text: "**Avantage :** Un raccourci apparaîtra sur votre écran d'accueil pour accéder en un tap à votre carte, aux bons plans et au scanner.")
                 }
             }
         }

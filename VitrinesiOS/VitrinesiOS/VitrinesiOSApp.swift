@@ -17,6 +17,9 @@ struct VitrinesiOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // L'app conserve la charte Vitrines (claire) quel que soit le
+                // réglage système — pas de mode sombre pour l'instant.
+                .preferredColorScheme(.light)
         }
     }
 }

@@ -20,6 +20,11 @@ final class MonCompteViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
+
+        // Affichage immédiat depuis le cache (carte fidélité dispo hors-ligne).
+        if cardNumber == nil { cardNumber = LoyaltyCardStore.cardnumber }
+        if balance == nil { balance = LoyaltyCardStore.balance }
+
         guard let uid = await OdooSession.shared.getUID() else { return }
         do {
             // 1) user → partner_id
@@ -41,7 +46,8 @@ final class MonCompteViewModel: ObservableObject {
                 firstName = p.firstName?.nilIfEmpty
                     ?? p.name?.split(separator: " ").first.map(String.init)
                     ?? sessionFirst
-                cardNumber = p.cardnumber?.nilIfEmpty
+                cardNumber = p.cardnumber?.nilIfEmpty ?? cardNumber
+                LoyaltyCardStore.cardnumber = cardNumber
 
                 // 3) carte → solde cumulé
                 if let cardId = p.cardId {
@@ -50,7 +56,10 @@ final class MonCompteViewModel: ObservableObject {
                         kwargs: ["domain": [["id", "=", cardId]],
                                  "fields": ["total_add_credit_amount"], "limit": 1]
                     )
-                    balance = cards.first?.total
+                    if let total = cards.first?.total {
+                        balance = total
+                        LoyaltyCardStore.balance = total
+                    }
                 }
             }
         } catch {

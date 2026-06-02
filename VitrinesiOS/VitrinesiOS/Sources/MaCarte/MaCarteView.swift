@@ -6,6 +6,7 @@
 import SwiftUI
 import Combine
 import CoreImage.CIFilterBuiltins
+import Network
 
 // MARK: - ViewModel
 
@@ -29,6 +30,30 @@ final class MaCarteViewModel: ObservableObject {
 
     private let client = OdooClient.shared
 
+    // Surveillance réseau : rafraîchir la carte quand la connexion revient.
+    private let pathMonitor = NWPathMonitor()
+    private var monitoringStarted = false
+    private var wasOffline = false
+
+    private func startNetworkMonitoring() {
+        guard !monitoringStarted else { return }
+        monitoringStarted = true
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self else { return }
+                if path.status == .satisfied {
+                    if self.wasOffline {
+                        self.wasOffline = false
+                        await self.load()   // réseau revenu → re-synchro solde + historique
+                    }
+                } else {
+                    self.wasOffline = true
+                }
+            }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "vda.macarte.netmonitor"))
+    }
+
     static func periodLabel(_ ym: String) -> String {
         let parts = ym.split(separator: "-")
         guard parts.count == 2, let m = Int(parts[1]) else { return ym }
@@ -40,6 +65,13 @@ final class MaCarteViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
+        startNetworkMonitoring()
+
+        // Affichage immédiat depuis le cache (fonctionne hors-ligne / en caisse).
+        if cardNumber == nil { cardNumber = LoyaltyCardStore.cardnumber }
+        if fullName.isEmpty, let n = LoyaltyCardStore.holderName { fullName = n }
+        if balance == nil { balance = LoyaltyCardStore.balance }
+
         guard let uid = await OdooSession.shared.getUID() else { return }
         do {
             let users: [PartnerRefRow] = try await client.call(
@@ -57,11 +89,15 @@ final class MaCarteViewModel: ObservableObject {
             guard let p = partners.first else { return }
             let sessionName = await OdooSession.shared.getUserName()
             fullName = p.name?.nilIfEmpty ?? sessionName ?? ""
-            cardNumber = p.cardnumber?.nilIfEmpty
+            cardNumber = p.cardnumber?.nilIfEmpty ?? cardNumber
             emailOptIn = (p.emailOptIn == "1")
             smsOptIn = (p.smsOptIn == "1")
+
+            // Mise en cache pour l'affichage hors-ligne de la carte.
+            LoyaltyCardStore.cardnumber = cardNumber
+            LoyaltyCardStore.holderName = fullName
         } catch {
-            // page reste affichable
+            // hors-ligne / erreur : on garde les valeurs du cache déjà affichées
         }
 
         await loadHistory()
@@ -82,7 +118,7 @@ final class MaCarteViewModel: ObservableObject {
             visitedMerchants = resp.visited.map {
                 VisitedMerchant(merchantId: $0.merchantId, merchantName: $0.merchantName, lastDate: $0.last)
             }
-            if let credit = resp.cumulCredit { balance = credit }
+            if let credit = resp.cumulCredit { balance = credit; LoyaltyCardStore.balance = credit }
             eventsError = nil
         } catch {
             eventsError = (error as? OdooError)?.errorDescription ?? error.localizedDescription
@@ -236,6 +272,7 @@ struct MaCarteView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
         .fullScreenCover(isPresented: $showBarcode) {
             CardBackView(cardNumber: viewModel.cardNumber)
         }

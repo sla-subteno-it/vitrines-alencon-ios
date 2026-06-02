@@ -65,6 +65,7 @@ struct LoginView: View {
                 auth.email = ""
                 auth.password = ""
                 auth.errorMessage = nil
+                LoyaltyCardStore.clear()
                 Task { await OdooClient.shared.resetForEnvironmentSwitch() }
             }
             Text(OdooConfig.baseURL)
