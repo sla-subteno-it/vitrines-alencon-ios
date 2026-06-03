@@ -262,6 +262,7 @@ struct MaCarteView: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Ma carte de fidélité. Toucher pour afficher le code-barres en grand.")
                 barcodeHint
+                AddToWalletButton()
                 Divider()
                 preferencesSection
                 Divider()
