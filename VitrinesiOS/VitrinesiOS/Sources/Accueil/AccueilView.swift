@@ -73,24 +73,30 @@ final class AccueilViewModel: ObservableObject {
     }
 
     private func loadAccount() async {
+        // Affichage immédiat depuis le cache (instantané / hors-ligne).
+        if balance == nil { balance = LoyaltyCardStore.balance }
+
         guard let uid = await OdooSession.shared.getUID() else { return }
         guard let users: [URow] = try? await client.call(
             model: "res.users", method: "search_read", args: [],
             kwargs: ["domain": [["id", "=", uid]], "fields": ["partner_id"], "limit": 1]),
               let pid = users.first?.pid else { return }
-        guard let partners: [PRow] = try? await client.call(
+        if let partners: [PRow] = try? await client.call(
             model: "res.partner", method: "search_read", args: [],
             kwargs: ["domain": [["id", "=", pid]], "fields": ["first_name", "name", "local_rewards_card_id"], "limit": 1]),
-              let p = partners.first else { return }
-        let sessionName = await OdooSession.shared.getUserName()
-        firstName = p.firstName?.nilIfEmptyA
-            ?? p.name?.split(separator: " ").first.map(String.init)
-            ?? sessionName?.split(separator: " ").first.map(String.init)
-        if let cardId = p.cardId {
-            let cards: [CRow]? = try? await client.call(
-                model: "local.rewards.card", method: "search_read", args: [],
-                kwargs: ["domain": [["id", "=", cardId]], "fields": ["total_add_credit_amount"], "limit": 1])
-            balance = cards?.first?.total
+           let p = partners.first {
+            let sessionName = await OdooSession.shared.getUserName()
+            firstName = p.firstName?.nilIfEmptyA
+                ?? p.name?.split(separator: " ").first.map(String.init)
+                ?? sessionName?.split(separator: " ").first.map(String.init)
+        }
+
+        // Cumul à jour + synchro Adelya déclenchée à l'ouverture (endpoint serveur,
+        // même source que Ma Carte). C'est Odoo qui parle à Adelya, pas l'app.
+        if let resp: LoyaltyHistoryResponse = try? await client.callRoute("/my/loyalty/history", params: [:]),
+           let credit = resp.cumulCredit {
+            balance = credit
+            LoyaltyCardStore.balance = credit
         }
     }
 }
