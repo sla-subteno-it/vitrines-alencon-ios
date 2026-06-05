@@ -105,6 +105,10 @@ private extension String { var nilIfEmptyA: String? { isEmpty ? nil : self } }
 
 // MARK: - Vue
 
+/// Destinations de l'Accueil poussées par valeur (pour que le reset d'onglet
+/// — vidage du NavigationPath — les dépile bien).
+enum AccueilDestination: Hashable { case maCarte }
+
 struct AccueilView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var viewModel = AccueilViewModel()
@@ -118,7 +122,7 @@ struct AccueilView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     statsRow
-                    NavigationLink { MaCarteView() } label: { balanceCard }.buttonStyle(.plain)
+                    NavigationLink(value: AccueilDestination.maCarte) { balanceCard }.buttonStyle(.plain)
                     quickActions
                     if !viewModel.offers.isEmpty { offersSection }
                     if !viewModel.news.isEmpty { newsSection }
@@ -131,6 +135,7 @@ struct AccueilView: View {
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: AccueilDestination.self) { _ in MaCarteView() }
             .navigationDestination(for: MerchantCoupon.self) { CouponDetailView(coupon: $0) }
             .navigationDestination(for: Merchant.self) { MerchantDetailView(merchantId: $0.id, merchantName: $0.name) }
             .navigationDestination(for: BlogPost.self) { AccueilBlogDestination(post: $0) }
