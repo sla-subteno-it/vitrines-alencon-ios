@@ -35,6 +35,7 @@ struct LoginView: View {
                     }
 
                     loginButton
+                    forgotPasswordButton
                 }
             }
             .padding(24)
@@ -44,6 +45,9 @@ struct LoginView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Color(.systemGroupedBackground))
         .animation(.default, value: auth.errorMessage)
+        .sheet(isPresented: $auth.showResetSheet) {
+            ResetPasswordSheet().environmentObject(auth)
+        }
     }
 
     // MARK: - Sous-vues
@@ -144,11 +148,110 @@ struct LoginView: View {
         .padding(.top, 8)
     }
 
+    private var forgotPasswordButton: some View {
+        Button("Mot de passe oublié ?") {
+            focusedField = nil
+            auth.openResetSheet()
+        }
+        .font(.subheadline)
+        .tint(Color.accentColor)
+    }
+
     // MARK: - Action
 
     private func submit() {
         focusedField = nil
         Task { await auth.login() }
+    }
+}
+
+// MARK: - Feuille « Mot de passe oublié »
+
+private struct ResetPasswordSheet: View {
+    @EnvironmentObject private var auth: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if auth.resetDone {
+                    successContent
+                } else {
+                    formContent
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Mot de passe oublié")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(auth.resetDone ? "Fermer" : "Annuler") { dismiss() }
+                        .disabled(auth.resetLoading)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private var formContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Saisissez votre identifiant (adresse e-mail). Nous vous enverrons un lien pour réinitialiser votre mot de passe.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextField("Identifiant", text: $auth.resetEmail)
+                .textContentType(.username)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($focused)
+                .submitLabel(.go)
+                .onSubmit { Task { await auth.requestPasswordReset() } }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+                .disabled(auth.resetLoading)
+
+            if let error = auth.resetError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            Button {
+                focused = false
+                Task { await auth.requestPasswordReset() }
+            } label: {
+                ZStack {
+                    Text("Envoyer").fontWeight(.semibold).opacity(auth.resetLoading ? 0 : 1)
+                    if auth.resetLoading { ProgressView().tint(.white) }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.accentColor)
+            .disabled(auth.resetLoading)
+        }
+        .onAppear { focused = true }
+        .animation(.default, value: auth.resetError)
+    }
+
+    private var successContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "envelope.badge.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(Color.accentColor)
+            Text("E-mail envoyé")
+                .font(.headline)
+            Text("Si un compte correspond à cet identifiant, un e-mail contenant un lien de réinitialisation vient d'être envoyé. Pensez à vérifier vos courriers indésirables.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 24)
     }
 }
 

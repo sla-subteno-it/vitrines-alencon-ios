@@ -596,6 +596,25 @@ final class OdooClient {
         return true
     }
 
+    /// Demande de réinitialisation du mot de passe (`/web/reset_password`).
+    /// Odoo envoie un email contenant le lien de réinitialisation. Reproduit le
+    /// POST du formulaire web pour rester 100 % dans l'app (aucun navigateur).
+    func requestPasswordReset(login: String) async throws {
+        guard let csrf = await websiteCSRFToken(path: "/web/reset_password") else {
+            throw OdooError.invalidResponse
+        }
+        let (code, html) = try await postForm(path: "/web/reset_password",
+                                              params: ["login": login, "csrf_token": csrf])
+        guard code == 200 else { throw OdooError.invalidResponse }
+        // Succès Odoo : encart alert-success (« Un email a été envoyé… »).
+        if html.contains("alert-success") { return }
+        // Erreur explicite (ex. « Aucun compte trouvé pour cet identifiant »).
+        if let err = firstAlertText(in: html, kind: "alert-danger") {
+            throw OdooError.odooError(code: -1, message: err)
+        }
+        // Pas d'alerte détectable (ex. redirection /web/login) → demande prise en compte.
+    }
+
     /// Inscription (création de carte) via `/web/signup`. En cas de succès, Odoo
     /// connecte l'utilisateur (cookie de session) ; on restaure alors la session.
     func signup(fields: [String: String]) async throws {

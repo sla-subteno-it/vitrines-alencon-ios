@@ -53,6 +53,13 @@ final class AuthViewModel: ObservableObject {
     /// Nom de l'utilisateur connecté (pour l'onglet Mon Compte).
     @Published var userName: String?
 
+    // MARK: - Mot de passe oublié (réinitialisation in-app)
+    @Published var showResetSheet = false
+    @Published var resetEmail = ""
+    @Published var resetLoading = false
+    @Published var resetError: String?
+    @Published var resetDone = false
+
     private let client = OdooClient.shared
 
     // MARK: - Lancement
@@ -103,6 +110,34 @@ final class AuthViewModel: ObservableObject {
             await PushManager.shared.registerWithBackend()
         } catch {
             errorMessage = (error as? OdooError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    // MARK: - Mot de passe oublié
+
+    /// Ouvre la feuille « mot de passe oublié » (pré-remplie avec l'identifiant saisi).
+    func openResetSheet() {
+        resetEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        resetError = nil
+        resetDone = false
+        showResetSheet = true
+    }
+
+    /// Déclenche l'envoi de l'email de réinitialisation par Odoo.
+    func requestPasswordReset() async {
+        let login = resetEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !login.isEmpty else {
+            resetError = "Saisissez votre identifiant (e-mail)."
+            return
+        }
+        resetLoading = true
+        resetError = nil
+        defer { resetLoading = false }
+        do {
+            try await client.requestPasswordReset(login: login)
+            resetDone = true
+        } catch {
+            resetError = (error as? OdooError)?.errorDescription ?? error.localizedDescription
         }
     }
 
