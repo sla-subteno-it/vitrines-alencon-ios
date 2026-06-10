@@ -122,7 +122,6 @@ struct AccueilView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header
                     NavigationLink(value: AccueilDestination.maCarte) { balanceCard }.buttonStyle(.plain)
-                    statsCard
                     quickActions
                     if !viewModel.offers.isEmpty { offersSection }
                     if !viewModel.news.isEmpty { newsSection }
@@ -178,33 +177,6 @@ struct AccueilView: View {
         var b = AttributedString("Vitrines d'Alençon")
         b.foregroundColor = .brandRed
         return a + b
-    }
-
-    // MARK: Stats
-
-    private var statsCard: some View {
-        HStack(spacing: 0) {
-            stat(viewModel.commerceCount, "Commerces", icon: "storefront.fill", color: .brandNavy)
-            Divider().frame(height: 34)
-            stat(viewModel.fidelityCount, "Fidélités", icon: "tag.fill", color: .brandRed)
-            Divider().frame(height: 34)
-            stat(viewModel.giftCount, "Cartes cadeaux", icon: "gift.fill", color: .brandGreen)
-        }
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity)
-        .background(.white, in: .rect(cornerRadius: 16))
-        .cardShadow()
-        .padding(.horizontal, 16)
-    }
-
-    private func stat(_ value: Int, _ label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 15)).foregroundStyle(color)
-            Text("\(value)").font(BrandFont.serif(22, weight: .bold)).foregroundStyle(color)
-            Text(label).font(BrandFont.sans(11, weight: .medium))
-                .foregroundStyle(Color.brandTextMuted)
-        }
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: Carte fidélité
