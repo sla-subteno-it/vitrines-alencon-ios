@@ -119,9 +119,8 @@ struct AccueilView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 20) {
                     header
-                    statsRow
                     NavigationLink(value: AccueilDestination.maCarte) { balanceCard }.buttonStyle(.plain)
                     quickActions
                     if !viewModel.offers.isEmpty { offersSection }
@@ -129,10 +128,11 @@ struct AccueilView: View {
                     if !viewModel.merchants.isEmpty { merchantsSection }
                     logoutButton
                 }
-                .padding(.vertical, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
             }
             .aboveTabBar()
-            .background(Color(.systemBackground))
+            .background(Color.brandSurface)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: AccueilDestination.self) { _ in MaCarteView() }
@@ -148,14 +148,27 @@ struct AccueilView: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Bonjour \(viewModel.firstName ?? ""),")
-                .font(BrandFont.sans(15))
-                .foregroundStyle(Color.brandTextMuted)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(Color.brandNavy).frame(width: 40, height: 40)
+                    Text(initial)
+                        .font(BrandFont.serif(18, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                Text("Bonjour \(viewModel.firstName ?? "") 👋".trimmingCharacters(in: .whitespaces))
+                    .font(BrandFont.sans(15))
+                    .foregroundStyle(Color.brandTextMuted)
+            }
             Text(welcomeAttributed)
                 .font(BrandFont.serif(24, weight: .bold))
         }
         .padding(.horizontal, 16)
+    }
+
+    private var initial: String {
+        viewModel.firstName?.trimmingCharacters(in: .whitespaces).first
+            .map { String($0).uppercased() } ?? "👤"
     }
 
     private var welcomeAttributed: AttributedString {
@@ -166,74 +179,56 @@ struct AccueilView: View {
         return a + b
     }
 
-    // MARK: Stats
-
-    private var statsRow: some View {
-        HStack(spacing: 0) {
-            stat(viewModel.commerceCount, "Commerces")
-            Divider().frame(height: 36)
-            stat(viewModel.fidelityCount, "Fidélités")
-            Divider().frame(height: 36)
-            stat(viewModel.giftCount, "Cartes cadeaux")
-        }
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) { Divider() }
-        .overlay(alignment: .bottom) { Divider() }
-        .padding(.horizontal, 16)
-    }
-
-    private func stat(_ value: Int, _ label: String) -> some View {
-        VStack(spacing: 4) {
-            Text("\(value)").font(BrandFont.serif(22, weight: .bold)).foregroundStyle(Color.brandNavy)
-            Text(label.uppercased()).font(BrandFont.sans(10, weight: .semibold)).tracking(0.4)
-                .foregroundStyle(Color.brandTextMuted)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     // MARK: Carte fidélité
 
     private var balanceCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("MA CARTE FIDÉLITÉ")
-                        .font(BrandFont.sans(11, weight: .bold)).tracking(0.6)
-                        .foregroundStyle(.white.opacity(0.85))
-                    Text(viewModel.balance.map { String(format: "%.2f €", $0) } ?? "—")
-                        .font(BrandFont.serif(26, weight: .bold)).foregroundStyle(.white)
-                    Text("Voir ma carte et mon historique")
-                        .font(BrandFont.sans(13)).foregroundStyle(.white.opacity(0.85))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.85))
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(.white).frame(width: 46, height: 46)
+                Image(systemName: "wallet.pass.fill")
+                    .font(.system(size: 22)).foregroundStyle(Color.brandRed)
             }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("MA CAGNOTTE FIDÉLITÉ")
+                    .font(BrandFont.sans(11, weight: .bold)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.9))
+                Text(viewModel.balance.map { String(format: "%.2f €", $0) } ?? "—")
+                    .font(BrandFont.serif(26, weight: .bold)).foregroundStyle(.white)
+                Text("Voir ma carte et mon historique")
+                    .font(BrandFont.sans(13)).foregroundStyle(.white.opacity(0.9))
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.9))
         }
-        .padding(18)
-        .background(LinearGradient.brandNavy, in: .rect(cornerRadius: 16))
+        .padding(16)
+        .background(LinearGradient.brandRed, in: .rect(cornerRadius: 20))
         .padding(.horizontal, 16)
     }
 
     // MARK: Raccourcis
 
     private var quickActions: some View {
-        HStack(spacing: 10) {
-            quickAction("Commerces", icon: "storefront") { selectTab(.merchants) }
-            quickAction("Notifications", icon: "bell") { selectTab(.notifs) }
-            quickAction("Carte cadeau", icon: "gift") { selectTab(.account) }
+        HStack(spacing: 12) {
+            quickAction("Commerces", icon: "storefront.fill", color: .brandNavy) { selectTab(.merchants) }
+            quickAction("Notifications", icon: "bell.fill", color: .brandRed) { selectTab(.notifs) }
+            quickAction("Carte cadeau", icon: "gift.fill", color: .brandGreen) { selectTab(.account) }
         }
         .padding(.horizontal, 16)
     }
 
-    private func quickAction(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func quickAction(_ title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon).font(.system(size: 20)).foregroundStyle(Color.brandNavy)
-                Text(title).font(BrandFont.sans(13, weight: .semibold)).foregroundStyle(.primary)
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(color.opacity(0.12)).frame(width: 44, height: 44)
+                    Image(systemName: icon).font(.system(size: 19)).foregroundStyle(color)
+                }
+                Text(title).font(BrandFont.sans(13, weight: .semibold)).foregroundStyle(Color.brandNavy)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 16)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.brandNavy.opacity(0.12), lineWidth: 1))
+            .background(.white, in: .rect(cornerRadius: 16))
+            .cardShadow()
         }
         .buttonStyle(.plain)
     }
@@ -241,11 +236,8 @@ struct AccueilView: View {
     // MARK: EN CE MOMENT (offres)
 
     private var offersSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("En ce moment", voirTout: { selectTab(.deals) })
-            Text("Découvrez les offres actives et les bons plans à utiliser dès aujourd'hui.")
-                .font(BrandFont.sans(14)).foregroundStyle(Color.brandTextMuted)
-                .padding(.horizontal, 16)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(viewModel.offers) { offer in
@@ -261,7 +253,7 @@ struct AccueilView: View {
     // MARK: Actualités
 
     private var newsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Agenda et actualités", voirTout: { selectTab(.news) })
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -278,7 +270,7 @@ struct AccueilView: View {
     // MARK: Commerces à découvrir
 
     private var merchantsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Commerces à découvrir", voirTout: { selectTab(.merchants) })
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -295,10 +287,11 @@ struct AccueilView: View {
     // MARK: Helpers
 
     private func sectionTitle(_ title: String, voirTout: (() -> Void)? = nil) -> some View {
-        HStack {
-            Text(title.uppercased())
-                .font(BrandFont.sans(12, weight: .bold)).tracking(0.6)
-                .foregroundStyle(Color.brandTextMuted)
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2).fill(Color.brandRed).frame(width: 4, height: 20)
+            Text(title)
+                .font(BrandFont.serif(18, weight: .bold))
+                .foregroundStyle(Color.brandNavy)
             Spacer()
             if let voirTout {
                 Button(action: voirTout) {
@@ -311,8 +304,8 @@ struct AccueilView: View {
     }
 
     private func featuredCard(image: URL?, title: String, subtitle: String?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Color.clear.aspectRatio(1, contentMode: .fit)
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(height: 132)
                 .overlay {
                     RemoteImage(url: image) { phase in
                         if case .success(let img) = phase { img.resizable().scaledToFill() }
@@ -320,13 +313,20 @@ struct AccueilView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            Text(title).font(BrandFont.serif(16, weight: .bold)).foregroundStyle(Color.brandNavy).lineLimit(2)
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle).font(BrandFont.sans(13)).foregroundStyle(Color.brandTextMuted).lineLimit(2)
+                .clipped()
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(BrandFont.serif(16, weight: .bold)).foregroundStyle(Color.brandNavy).lineLimit(2)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(BrandFont.sans(13)).foregroundStyle(Color.brandTextMuted).lineLimit(2)
+                }
             }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: 220)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .cardShadow()
     }
 
     private var logoutButton: some View {
@@ -336,6 +336,13 @@ struct AccueilView: View {
                 .frame(maxWidth: .infinity).padding(.vertical, 16)
         }
         .padding(.top, 12)
+    }
+}
+
+private extension View {
+    /// Ombre douce des cartes blanches sur fond gris clair.
+    func cardShadow() -> some View {
+        shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
 }
 
