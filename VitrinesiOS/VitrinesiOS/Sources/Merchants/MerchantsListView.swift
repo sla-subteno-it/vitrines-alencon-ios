@@ -9,6 +9,7 @@ struct MerchantsListView: View {
     @StateObject private var viewModel = MerchantsViewModel()
     @State private var showFilters = false
     @State private var showMarques = false
+    @State private var showMap = false
     @State private var path = NavigationPath()
 
     /// Incrémenté par le tab bar → revenir à la racine (sans recharger).
@@ -21,26 +22,42 @@ struct MerchantsListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    searchAndFilters
+            VStack(spacing: 0) {
+                viewModePicker
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
 
-                    Group {
-                        if viewModel.isLoading && viewModel.merchants.isEmpty {
-                            loadingView
-                        } else if let error = viewModel.errorMessage, viewModel.merchants.isEmpty {
-                            errorView(error)
-                        } else if viewModel.merchants.isEmpty {
-                            emptyView
-                        } else {
-                            grid
+                if showMap {
+                    MerchantsMapView(
+                        merchants: viewModel.merchants,
+                        brandNames: { viewModel.brandNames(for: $0) },
+                        onOpenMerchant: { path.append($0) }
+                    )
+                    .aboveTabBar()
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            searchAndFilters
+
+                            Group {
+                                if viewModel.isLoading && viewModel.merchants.isEmpty {
+                                    loadingView
+                                } else if let error = viewModel.errorMessage, viewModel.merchants.isEmpty {
+                                    errorView(error)
+                                } else if viewModel.merchants.isEmpty {
+                                    emptyView
+                                } else {
+                                    grid
+                                }
+                            }
                         }
+                        .padding(.horizontal, 16)
                     }
+                    .aboveTabBar()
                 }
-                .padding(.horizontal, 16)
             }
-            .aboveTabBar()
             .background(LinearGradient.brandSurface.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
@@ -64,6 +81,16 @@ struct MerchantsListView: View {
             .refreshable { await viewModel.loadAll() }
         }
         .onChange(of: popTrigger) { _, _ in path = NavigationPath() }
+    }
+
+    // MARK: - Bascule Liste / Carte
+
+    private var viewModePicker: some View {
+        Picker("Affichage", selection: $showMap) {
+            Label("Liste", systemImage: "square.grid.2x2.fill").tag(false)
+            Label("Carte", systemImage: "map.fill").tag(true)
+        }
+        .pickerStyle(.segmented)
     }
 
     // MARK: - Header éditorial

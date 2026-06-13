@@ -21,7 +21,8 @@ final class MerchantService {
         "local_rewards_tag_ids",
         "ordered_reference_ids",
         "reference_tag_ids",
-        "street", "zip", "city"
+        "street", "zip", "city",
+        "partner_latitude", "partner_longitude"
     ]
 
     // MARK: - Champs pour la fiche détail
