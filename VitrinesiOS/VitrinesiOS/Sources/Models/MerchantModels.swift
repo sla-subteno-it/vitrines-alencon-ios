@@ -4,6 +4,7 @@
 // (res.partner, local.rewards.tag, merchant.reference, merchant.reference.tag)
 
 import Foundation
+import CoreLocation
 
 // MARK: - Commerçant (res.partner côté merchant)
 
@@ -49,6 +50,10 @@ struct Merchant: Identifiable, Decodable, Hashable {
     // Visible dans l'annuaire
     let isVisible: Bool
 
+    // Géolocalisation (base_geolocalize) — 0/false si non géolocalisé
+    let latitude: Double?
+    let longitude: Double?
+
     // MARK: - CodingKeys
 
     enum CodingKeys: String, CodingKey {
@@ -68,6 +73,8 @@ struct Merchant: Identifiable, Decodable, Hashable {
         case referenceTagIds      = "reference_tag_ids"
         case apiUniqueId          = "api_unique_id"
         case isVisible            = "is_visible"
+        case latitude             = "partner_latitude"
+        case longitude            = "partner_longitude"
     }
 
     // Décodage custom car Odoo renvoie false ou [Int] pour les Many2many
@@ -103,6 +110,16 @@ struct Merchant: Identifiable, Decodable, Hashable {
         localRewardsTagIds  = (try? c.decode([Int].self, forKey: .localRewardsTagIds))  ?? []
         orderedReferenceIds = (try? c.decode([Int].self, forKey: .orderedReferenceIds)) ?? []
         referenceTagIds     = (try? c.decode([Int].self, forKey: .referenceTagIds))     ?? []
+
+        // Géoloc : Odoo renvoie false (→ nil) ou un Double (0.0 = non géolocalisé)
+        latitude  = (try? c.decode(Double.self, forKey: .latitude)).flatMap { $0 == 0 ? nil : $0 }
+        longitude = (try? c.decode(Double.self, forKey: .longitude)).flatMap { $0 == 0 ? nil : $0 }
+    }
+
+    /// Coordonnée si le commerçant est géolocalisé côté Odoo.
+    var coordinate: CLLocationCoordinate2D? {
+        guard let lat = latitude, let lon = longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 
     // URL image Odoo
