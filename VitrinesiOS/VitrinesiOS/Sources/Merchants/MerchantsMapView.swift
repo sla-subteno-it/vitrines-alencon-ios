@@ -60,8 +60,12 @@ struct MerchantsMapView: View {
                 }
                 UserAnnotation()
             }
+            // Relief 3D natif : bâtiments en volume quand l'utilisateur incline
+            // la carte à deux doigts (gratuit, MapKit standard).
+            .mapStyle(.standard(elevation: .realistic))
             .mapControls {
                 MapCompass()
+                MapPitchToggle()
                 MapUserLocationButton()
             }
             .ignoresSafeArea(edges: .bottom)
